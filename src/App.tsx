@@ -1,34 +1,47 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
+import TopNav from './components/TopNav'
+import Landing from './pages/Landing'
+import IDE from './pages/IDE'
+import RunsList from './pages/RunsList'
+import RunDetail from './pages/RunDetail'
+import WorkflowsList from './pages/WorkflowsList'
+import WorkflowDetail from './pages/WorkflowDetail'
+import Blocks from './pages/Blocks'
+import Templates from './pages/Templates'
+import Integrations from './pages/Integrations'
+import Settings from './pages/Settings'
+import Docs from './pages/Docs'
+import NotFound from './pages/NotFound'
+import { ToastProvider } from './components/ToastProvider'
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <BrowserRouter>
+      <ToastProvider>
+        <div className="app-root">
+          <TopNav />
+          <div className="page-outlet">
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/ide" element={<IDE />} />
+              <Route path="/ide/:workflowId" element={<IDE />} />
+              <Route path="/runs" element={<RunsList />} />
+              <Route path="/runs/:runId" element={<RunDetail />} />
+              <Route path="/workflows" element={<WorkflowsList />} />
+              <Route path="/workflows/:workflowId" element={<WorkflowDetail />} />
+              <Route path="/blocks" element={<Blocks />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/integrations" element={<Integrations />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/docs" element={<Docs />} />
+              <Route path="/404" element={<NotFound />} />
+              <Route path="*" element={<Navigate to="/404" replace />} />
+            </Routes>
+          </div>
+        </div>
+      </ToastProvider>
+    </BrowserRouter>
   )
 }
 

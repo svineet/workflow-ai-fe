@@ -11,6 +11,10 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --accent: #c6ff3e; /* lime */
+  --border: #000000;
+  --nav-height: 56px;
 }
 
 a {
@@ -24,10 +28,10 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background: #fafafa;
+  color: #111;
 }
 
 h1 {
@@ -53,6 +57,21 @@ button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
+
+* { box-sizing: border-box; }
+
+button, .neo-button {
+  cursor: pointer;
+}
+
+.main-wrap { width: 100%; margin: 0 auto; padding: 16px; max-width: 90vw; }
+@media (min-width: 640px) { .main-wrap { max-width: 640px; } }
+@media (min-width: 768px) { .main-wrap { max-width: 720px; } }
+@media (min-width: 1024px) { .main-wrap { max-width: 960px; } }
+@media (min-width: 1280px) { .main-wrap { max-width: 1100px; } }
+
+/* The IDE page uses full viewport height minus nav and edge-to-edge width */
+.page-ide { height: calc(100vh - var(--nav-height)); width: 100%; padding: 0; margin: 0; }
 
 @media (prefers-color-scheme: light) {
   :root {
