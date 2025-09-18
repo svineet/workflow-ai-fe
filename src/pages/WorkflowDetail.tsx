@@ -39,6 +39,9 @@ function WorkflowDetail() {
             {workflowId && (
               <span className="pill-muted" style={{fontSize: '0.8em'}}>#{workflowId}</span>
             )}
+            {apiWorkflow?.webhook_slug && (
+              <span className="pill-muted" style={{fontSize: '0.8em'}}>@{apiWorkflow.webhook_slug}</span>
+            )}
           </h2>
           <div className="meta-actions">
             <button className="neo-button" onClick={handleRun}>Run workflow</button>
