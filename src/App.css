@@ -169,5 +169,12 @@
 .modal-close { position: absolute; top: 8px; right: 8px; border: 3px solid #000; background: #fff; color: #000; font-weight: 800; width: 28px; height: 28px; line-height: 1; display: grid; place-items: center; cursor: pointer; }
 .modal-card .modal-title, .modal-card h3 { font-size: 22px; font-weight: 800; margin: 0 0 8px 0; }
 
-.meta-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.meta-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.meta-actions { display: flex; gap: 8px; }
+.meta-title .pill-muted { font-size: 0.75em; margin-left: 8px; }
+@media (max-width: 640px) {
+  .meta-row { align-items: flex-start; }
+  .meta-actions { width: 100%; margin-top: 8px; }
+  .meta-actions .neo-button { width: 100%; }
+}
 .pill-muted { display: inline-block; border: 2px solid #000; background: #f2f2f2; color: #444; padding: 2px 6px; font-size: 12px; }

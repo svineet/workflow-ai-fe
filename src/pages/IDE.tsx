@@ -6,6 +6,7 @@ import { getMockLogsForIDE } from '../mocks/logs.ts'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useToast } from '../components/ToastProvider'
+import { useModal } from '../context/ModalContext'
 
 type BlockSpec = { type: string; summary?: string; input_schema?: any; output_schema?: any }
 
@@ -24,6 +25,7 @@ function typeToIcon(t: string): string {
 function IDE() {
   const { workflowId } = useParams()
   const { show } = useToast()
+  const { open } = useModal()
   const [nodes, setNodes] = useState<Node[]>(blocks.defaultNodes)
   const [edges, setEdges] = useState<Edge[]>(blocks.defaultEdges)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
@@ -32,7 +34,8 @@ function IDE() {
   const consoleRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    apiClient.getBlockSpecs().then((r) => setSpecs(r.blocks as unknown as BlockSpec[])).catch(() => setSpecs(null))
+    const loadSpecs = () => apiClient.getBlockSpecs().then((r) => setSpecs(r.blocks as unknown as BlockSpec[])).catch((e) => open({ title: 'Failed to load blocks', body: e?.message || 'Unknown error', primaryLabel: 'Retry', onPrimary: loadSpecs }))
+    loadSpecs()
   }, [])
 
   useEffect(() => {
@@ -69,11 +72,9 @@ function IDE() {
       consoleRef.current && (consoleRef.current.innerHTML += `<div class="console-line">${line}</div>`)
       show('success', `Run ${resp.id} started`)
     } catch (e: any) {
-      const line = `[RUN] failed to start`
-      consoleRef.current && (consoleRef.current.innerHTML += `<div class="console-line">${line}</div>`)
-      show('error', e?.message || 'Failed to start run')
+      open({ title: 'Failed to start run', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
     }
-  }, [workflowId, show])
+  }, [workflowId, show, open])
 
   const paletteItems = specs && specs.length > 0
     ? specs.map((s) => ({ type: s.type, label: s.type, summary: s.summary || '' }))

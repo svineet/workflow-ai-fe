@@ -2,8 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../api/client'
 import type { WorkflowResponse, Graph } from '../api/types'
-import Modal from '../components/Modal'
-import { useToast } from '../components/ToastProvider'
+import { useModal } from '../context/ModalContext'
 
 const mockWorkflows = [
   { id: 'wf-hello-world', name: 'Hello World', updatedAt: Date.now() - 86400000 },
@@ -12,13 +11,10 @@ const mockWorkflows = [
 
 function WorkflowsList() {
   const navigate = useNavigate()
-  const { show } = useToast()
+  const { open } = useModal()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [workflows, setWorkflows] = useState<Array<Pick<WorkflowResponse, 'id' | 'name' | 'webhook_slug' | 'created_at'>> | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [desc, setDesc] = useState('')
 
   useEffect(() => {
     setError(null)
@@ -29,26 +25,51 @@ function WorkflowsList() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleOpenModal = useCallback(() => {
-    setName('')
-    setDesc('')
-    setModalOpen(true)
-  }, [])
+  const handleNewWorkflow = useCallback(async () => {
+    let name = ''
+    let desc = ''
+    let slug = ''
 
-  const handleCreate = useCallback(async () => {
-    try {
-      setLoading(true)
-      const graph: Graph = { nodes: [{ id: 'start-1', type: 'start', params: {} }], edges: [] }
-      const created = await apiClient.createWorkflow({ name: name || 'New Workflow', webhook_slug: null, graph })
-      show('success', 'Workflow created')
-      setModalOpen(false)
-      navigate(`/workflows/${created.id}`)
-    } catch (e: any) {
-      show('error', e?.message || 'Failed to create workflow')
-    } finally {
-      setLoading(false)
-    }
-  }, [name, navigate, show])
+    open({
+      title: 'Create new workflow',
+      content: (
+        <div>
+          <div className="form-row">
+            <label>Name</label>
+            <input className="neo-input" placeholder="My Workflow" onChange={(e) => { name = e.target.value }} />
+          </div>
+          <div className="form-row">
+            <label>Description</label>
+            <input className="neo-input" placeholder="Optional" onChange={(e) => { desc = e.target.value }} />
+          </div>
+          <div className="form-row">
+            <label>Webhook Slug</label>
+            <input className="neo-input" placeholder="optional-slug" onChange={(e) => { slug = e.target.value }} />
+          </div>
+        </div>
+      ),
+      primaryLabel: 'Create',
+      secondaryLabel: 'Cancel',
+      onPrimary: async () => {
+        try {
+          setLoading(true)
+          const graph: Graph = {
+            nodes: [
+              { id: 'start-1', type: 'start', params: { description: desc || null } },
+            ],
+            edges: [],
+          }
+          const payload = { name: (name || 'New Workflow'), description: desc || null, webhook_slug: (slug ? slug.trim() : null), graph }
+          const created = await apiClient.createWorkflow(payload)
+          navigate(`/workflows/${created.id}`)
+        } catch (e: any) {
+          open({ title: 'Failed to create workflow', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
+  }, [navigate, open])
 
   const cards = useMemo(() => {
     if (workflows && workflows.length > 0) {
@@ -62,7 +83,7 @@ function WorkflowsList() {
       <div className="main-wrap">
         <div className="header-row">
           <h2>Workflows</h2>
-          <button className="neo-button primary" onClick={handleOpenModal} disabled={loading}>New Workflow</button>
+          <button className="neo-button primary" onClick={handleNewWorkflow} disabled={loading}>New Workflow</button>
         </div>
         {loading && <div className="neo-card" style={{marginBottom:12}}>Loading…</div>}
         {error && <div className="neo-card" style={{color:'#b00020', marginBottom:12}}>Error: {error}</div>}
@@ -79,22 +100,6 @@ function WorkflowsList() {
           ))}
         </div>
       </div>
-
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <div className="section-title">New Workflow</div>
-        <div className="form-row">
-          <label>Name</label>
-          <input className="neo-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Workflow" />
-        </div>
-        <div className="form-row">
-          <label>Description</label>
-          <input className="neo-input" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional" />
-        </div>
-        <div style={{display:'flex', gap:8, marginTop:8}}>
-          <button className="neo-button" onClick={() => setModalOpen(false)}>Cancel</button>
-          <button className="neo-button primary" onClick={handleCreate} disabled={loading || !name.trim()}>Create</button>
-        </div>
-      </Modal>
     </main>
   )
 }

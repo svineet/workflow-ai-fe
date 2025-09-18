@@ -4,11 +4,12 @@ export type GraphEdge = { id: string; from: string; to: string }
 export type Graph = { nodes: GraphNode[]; edges: GraphEdge[] }
 
 // Workflows
-export type WorkflowCreate = { name: string; webhook_slug?: string | null; graph: Graph }
+export type WorkflowCreate = { name: string; description?: string | null; webhook_slug?: string | null; graph: Graph }
 export type WorkflowUpdate = { name?: string; webhook_slug?: string | null; graph?: Graph }
 export type WorkflowResponse = {
   id: number
   name: string
+  description?: string | null
   webhook_slug?: string | null
   graph: Graph
   created_at: string

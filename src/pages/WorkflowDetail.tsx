@@ -1,40 +1,54 @@
-import { NavLink, useParams } from 'react-router-dom'
+import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { runs } from '../mocks/runs.ts'
 import { apiClient } from '../api/client'
 import type { WorkflowResponse } from '../api/types'
+import { useModal } from '../context/ModalContext'
 
 function WorkflowDetail() {
   const { workflowId } = useParams()
+  const navigate = useNavigate()
+  const { open } = useModal()
   const [apiWorkflow, setApiWorkflow] = useState<WorkflowResponse | null>(null)
 
   useEffect(() => {
     if (!workflowId) { setApiWorkflow(null); return }
     const numericId = Number(workflowId)
     if (!Number.isFinite(numericId)) { setApiWorkflow(null); return }
-    apiClient.getWorkflow(numericId).then(setApiWorkflow).catch(() => setApiWorkflow(null))
-  }, [workflowId])
+    apiClient.getWorkflow(numericId).then(setApiWorkflow).catch((e) => open({ title: 'Failed to load workflow', body: e?.message || 'Unknown error', primaryLabel: 'Close' }))
+  }, [workflowId, open])
 
   const relatedRuns = useMemo(() => runs.filter(r => r.workflowId === workflowId).sort((a, b) => b.startedAt - a.startedAt), [workflowId])
+
+  const handleRun = async () => {
+    if (!workflowId || !Number.isFinite(Number(workflowId))) return
+    try {
+      const resp = await apiClient.startRun(Number(workflowId), {})
+      navigate(`/runs/${resp.id}`)
+    } catch (e: any) {
+      open({ title: 'Failed to start run', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
+    }
+  }
 
   return (
     <main className="neo-container">
       <div className="main-wrap">
-        <div className="meta-row">
-          <h2 style={{margin:0}}>{apiWorkflow?.name || `Workflow`}</h2>
-          {workflowId && (
-            <span className="pill-muted">#{workflowId}</span>
-          )}
-        </div>
-        {apiWorkflow?.webhook_slug && (
-          <div className="neo-card" style={{marginBottom: 12}}>
-            <div className="muted"><strong>Webhook:</strong> {apiWorkflow.webhook_slug}</div>
+        <div className="meta-row" style={{flexWrap:'wrap'}}>
+          <h2 className="meta-title" style={{margin:0}}>
+            {apiWorkflow?.name || `Workflow`}
+            {workflowId && (
+              <span className="pill-muted" style={{fontSize: '0.8em'}}>#{workflowId}</span>
+            )}
+          </h2>
+          <div className="meta-actions">
+            <button className="neo-button" onClick={handleRun}>Run workflow</button>
+            <NavLink to={Number.isFinite(Number(workflowId)) ? `/ide/${workflowId}` : '/ide'} className="neo-button primary">Open IDE</NavLink>
           </div>
-        )}
+        </div>
+
         <div className="neo-card" style={{marginBottom: 12}}>
-          <div className="muted">Description goes here.</div>
-          <div className="spacer" />
-          <NavLink to={Number.isFinite(Number(workflowId)) ? `/ide/${workflowId}` : '/ide'} className="neo-button primary">Open in IDE</NavLink>
+          <div className="section-title">Description</div>
+          <div className="muted">{apiWorkflow?.description || 'No description provided.'}</div>
         </div>
 
         <div className="neo-card">
