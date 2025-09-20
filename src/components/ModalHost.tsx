@@ -1,4 +1,5 @@
 import { useModal } from '../context/ModalContext'
+import { FaTimes } from 'react-icons/fa'
 
 function ModalHost() {
   const { modal, close } = useModal()
@@ -8,7 +9,9 @@ function ModalHost() {
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-card">
-        <button className="modal-close" aria-label="Close" onClick={close}>×</button>
+        <button className="modal-close" aria-label="Close" onClick={close}>
+          <FaTimes size={14} />
+        </button>
         <h3 className="modal-title">{modal.title}</h3>
         {modal.content ? modal.content : (modal.body && <p>{modal.body}</p>)}
         <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:12}}>

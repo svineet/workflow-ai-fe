@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../api/client'
 import type { WorkflowResponse, Graph } from '../api/types'
 import { useModal } from '../context/ModalContext'
+import { FaPlus, FaTrash, FaWrench } from 'react-icons/fa'
 
 const mockWorkflows = [
   { id: 'wf-hello-world', name: 'Hello World', updatedAt: Date.now() - 86400000 },
@@ -15,8 +16,9 @@ function WorkflowsList() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [workflows, setWorkflows] = useState<Array<Pick<WorkflowResponse, 'id' | 'name' | 'webhook_slug' | 'created_at'>> | null>(null)
+  const [query, setQuery] = useState('')
 
-  useEffect(() => {
+  const loadList = useCallback(() => {
     setError(null)
     setLoading(true)
     apiClient.listWorkflows()
@@ -24,6 +26,10 @@ function WorkflowsList() {
       .catch((e) => setError(e?.message || 'Failed to load workflows'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    loadList()
+  }, [loadList])
 
   const handleNewWorkflow = useCallback(async () => {
     let name = ''
@@ -71,30 +77,57 @@ function WorkflowsList() {
     })
   }, [navigate, open])
 
+  const confirmDelete = useCallback((id: number, name: string) => {
+    open({
+      title: 'Delete workflow',
+      body: `Are you sure you want to delete “${name}”? This cannot be undone.`,
+      primaryLabel: 'Delete',
+      secondaryLabel: 'Cancel',
+      onPrimary: async () => {
+        try {
+          setLoading(true)
+          await apiClient.deleteWorkflow(id)
+          loadList()
+        } catch (e: any) {
+          open({ title: 'Failed to delete workflow', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
+        } finally {
+          setLoading(false)
+        }
+      },
+    })
+  }, [open, loadList])
+
   const cards = useMemo(() => {
-    if (workflows && workflows.length > 0) {
-      return workflows.map((wf) => ({ id: String(wf.id), name: wf.name, updatedAt: Date.parse(wf.created_at) }))
-    }
-    return mockWorkflows
-  }, [workflows])
+    const list = workflows && workflows.length > 0
+      ? workflows.map((wf) => ({ id: Number(wf.id), name: wf.name, slug: wf.webhook_slug || '', desc: '', updatedAt: Date.parse(wf.created_at) }))
+      : mockWorkflows.map((w) => ({ id: w.id as any, name: w.name, slug: '', desc: '', updatedAt: w.updatedAt }))
+    const q = query.trim().toLowerCase()
+    if (!q) return list
+    return list.filter((w) => w.name.toLowerCase().includes(q) || w.slug.toLowerCase().includes(q) || w.desc.toLowerCase().includes(q))
+  }, [workflows, query])
 
   return (
     <main className="neo-container">
       <div className="main-wrap">
-        <div className="header-row">
+        <div className="header-row" style={{gap: 8, flexWrap: 'wrap'}}>
           <h2>Workflows</h2>
-          <button className="neo-button primary" onClick={handleNewWorkflow} disabled={loading}>New Workflow</button>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <input className="neo-input" placeholder="Search…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <button className="neo-button primary" onClick={handleNewWorkflow} disabled={loading}><FaPlus /> New</button>
+          </div>
         </div>
         {loading && <div className="neo-card" style={{marginBottom:12}}>Loading…</div>}
         {error && <div className="neo-card" style={{color:'#b00020', marginBottom:12}}>Error: {error}</div>}
         <div className="grid">
           {cards.map((w) => (
             <div key={w.id} className="neo-card">
-              <div className="card-title">{w.name}</div>
-              <div className="muted">Updated {new Date(w.updatedAt).toLocaleString()}</div>
+              <div className="card-title link"><NavLink to={`/workflows/${w.id}`}>{w.name}</NavLink></div>
+              <div className="muted desc-min">Updated {new Date(w.updatedAt).toLocaleString()}</div>
               <div className="card-actions">
-                <NavLink to={`/workflows/${w.id}`} className="neo-button">Open</NavLink>
-                <NavLink to={`/ide/${w.id}`} className="neo-button">Edit in IDE</NavLink>
+                <NavLink to={`/ide/${w.id}`} className="neo-button success" style={{flex:1, display:'flex', alignItems:'center', gap:8}}><FaWrench /> Edit in IDE</NavLink>
+                {typeof w.id === 'number' && (
+                  <button className="neo-button danger" style={{width:44, display:'grid', placeItems:'center'}} onClick={() => confirmDelete(w.id as number, w.name)}><FaTrash /></button>
+                )}
               </div>
             </div>
           ))}

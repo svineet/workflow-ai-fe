@@ -19,6 +19,11 @@ export class ApiClient {
     return data
   }
 
+  async deleteWorkflow(workflowId: number) {
+    const { data } = await this.http.delete<{ deleted: boolean }>(`/workflows/${workflowId}`)
+    return data
+  }
+
   async listRuns() {
     const { data } = await this.http.get<Array<Pick<RunResponse, 'id' | 'workflow_id' | 'status' | 'started_at' | 'finished_at'>>>('/runs')
     return data

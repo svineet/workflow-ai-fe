@@ -5,7 +5,7 @@ import * as blocks from '../mocks/blocks.ts'
 import { getMockLogsForIDE } from '../mocks/logs.ts'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
-import { useToast } from '../components/ToastProvider'
+import { FaCog, FaChevronDown, FaChevronUp } from 'react-icons/fa'
 import { useModal } from '../context/ModalContext'
 
 type BlockSpec = { type: string; summary?: string; input_schema?: any; output_schema?: any }
@@ -24,19 +24,21 @@ function typeToIcon(t: string): string {
 
 function IDE() {
   const { workflowId } = useParams()
-  const { show } = useToast()
   const { open } = useModal()
   const [nodes, setNodes] = useState<Node[]>(blocks.defaultNodes)
   const [edges, setEdges] = useState<Edge[]>(blocks.defaultEdges)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [specs, setSpecs] = useState<BlockSpec[] | null>(null)
   const [query, setQuery] = useState<string>("")
+  const [toolboxOpen, setToolboxOpen] = useState<boolean>(false)
   const consoleRef = useRef<HTMLDivElement | null>(null)
+  const consoleLines: string[] = useMemo(() => getMockLogsForIDE(), [])
+  const [consoleOpen, setConsoleOpen] = useState<boolean>(true)
 
   useEffect(() => {
     const loadSpecs = () => apiClient.getBlockSpecs().then((r) => setSpecs(r.blocks as unknown as BlockSpec[])).catch((e) => open({ title: 'Failed to load blocks', body: e?.message || 'Unknown error', primaryLabel: 'Retry', onPrimary: loadSpecs }))
     loadSpecs()
-  }, [])
+  }, [open])
 
   useEffect(() => {
     if (workflowId && blocks.workflowGraphs[workflowId]) {
@@ -58,23 +60,9 @@ function IDE() {
     setSelectedNode(selected && selected.length > 0 ? selected[0] : null)
   }, [])
 
-  const consoleLines: string[] = useMemo(() => getMockLogsForIDE(), [])
-
   const handleAddBlock = useCallback((blockType: string) => {
     setNodes((prev) => [...prev, blocks.createNodeFromBlock(blockType, prev.length)])
   }, [])
-
-  const handleRun = useCallback(async () => {
-    if (!workflowId || !Number.isFinite(Number(workflowId))) return
-    try {
-      const resp = await apiClient.startRun(Number(workflowId), {})
-      const line = `[RUN ${resp.id}] started`
-      consoleRef.current && (consoleRef.current.innerHTML += `<div class="console-line">${line}</div>`)
-      show('success', `Run ${resp.id} started`)
-    } catch (e: any) {
-      open({ title: 'Failed to start run', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
-    }
-  }, [workflowId, show, open])
 
   const paletteItems = specs && specs.length > 0
     ? specs.map((s) => ({ type: s.type, label: s.type, summary: s.summary || '' }))
@@ -90,38 +78,49 @@ function IDE() {
     )
   }, [paletteItems, query])
 
+  const handleRun = useCallback(async () => {
+    if (!workflowId || !Number.isFinite(Number(workflowId))) return
+    try {
+      const resp = await apiClient.startRun(Number(workflowId), {})
+      const line = `[RUN ${resp.id}] started`
+      consoleRef.current && (consoleRef.current.innerHTML += `<div class="console-line">${line}</div>`)
+    } catch (e: any) {
+      open({ title: 'Failed to start run', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
+    }
+  }, [workflowId, open])
+
   return (
     <div className="page-ide" style={{padding: 0, margin: 0}}>
       <div className="nav-offset" />
-      <div className="ide-layout">
-        <aside className="ide-sidebar">
-          <div className="sidebar-section">
-            <div className="section-title">Blocks</div>
-            <input
-              type="text"
-              className="neo-input"
-              placeholder="Search blocks…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search blocks"
-            />
-            <div className="block-list">
-              {filteredItems.map((b: { type: string; label: string; summary?: string }) => (
-                <button key={b.type} className="neo-button block-item" onClick={() => handleAddBlock(b.type)}>
-                  <span style={{marginRight:8}}>{typeToIcon(b.type)}</span>
-                  <span>
-                    <div style={{fontWeight:700}}>{b.label}</div>
-                    {b.summary ? <div className="muted" style={{fontSize:11, lineHeight:1.2}}>{b.summary}</div> : null}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-
+      <div className={`ide-layout no-sidebar`}>
         <section className="ide-canvas">
           <div className="canvas-frame">
             <button className="neo-button run-button" onClick={handleRun}>Run</button>
+            <button className="neo-button toolbox-toggle" onClick={() => setToolboxOpen((v) => !v)}><FaCog size={16} /></button>
+            {toolboxOpen && (
+              <div className="toolbox-panel">
+                <div className="section-title">Blocks</div>
+                <input
+                  type="text"
+                  className="neo-input"
+                  placeholder="Search blocks…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Search blocks"
+                />
+                <div className="block-list">
+                  {filteredItems.map((b: { type: string; label: string; summary?: string }) => (
+                    <button key={b.type} className="neo-button block-item" onClick={() => handleAddBlock(b.type)}>
+                      <span style={{marginRight:8}}>{typeToIcon(b.type)}</span>
+                      <span>
+                        <div style={{fontWeight:700}}>{b.label}</div>
+                        {b.summary ? <div className="muted" style={{fontSize:11, lineHeight:1.2}}>{b.summary}</div> : null}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -153,8 +152,11 @@ function IDE() {
           </div>
         </aside>
 
-        <section className="ide-console" ref={consoleRef}>
-          <div className="section-title">Console</div>
+        <section className={`ide-console ${consoleOpen ? 'expanded' : 'collapsed'}`} ref={consoleRef}>
+          <div className="console-header">
+            <button className="neo-button toggle" onClick={() => setConsoleOpen((v) => !v)}>{consoleOpen ? <FaChevronDown /> : <FaChevronUp />}</button>
+            <div className="section-title" style={{margin:0}}>Console</div>
+          </div>
           <div className="console-lines">
             {consoleLines.map((l: string, i: number) => (
               <div key={i} className="console-line">{l}</div>

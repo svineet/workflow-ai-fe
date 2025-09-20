@@ -8,7 +8,7 @@ import ModalHost from './components/ModalHost'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ModalProvider>
-      <App />
+    <App />
       <ModalHost />
     </ModalProvider>
   </StrictMode>,
