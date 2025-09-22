@@ -1,14 +1,24 @@
 import dagre from 'dagre'
 import type { Edge, Node } from 'reactflow'
 
+function estimateNodeSize(n: Node): { width: number; height: number } {
+  const isConfig = n.type === 'config'
+  if (!isConfig) return { width: 260, height: 120 }
+  const props = (n as any)?.data?.schema?.settings_schema?.properties || {}
+  const fields = Math.max(1, Object.keys(props).length)
+  const width = 360
+  const height = Math.min(640, Math.max(160, 100 + fields * 32))
+  return { width, height }
+}
+
 export function layoutGraph(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'LR', nodesep: 40, ranksep: 60, marginx: 20, marginy: 20 })
+  g.setGraph({ rankdir: 'LR', nodesep: 180, ranksep: 220, marginx: 60, marginy: 60 })
   g.setDefaultEdgeLabel(() => ({}))
 
   nodes.forEach((n) => {
-    // estimate node size; config nodes will be wider but layout will still be ok
-    g.setNode(n.id, { width: 200, height: 80 })
+    const { width, height } = estimateNodeSize(n)
+    g.setNode(n.id, { width, height })
   })
   edges.forEach((e) => {
     g.setEdge(e.source as string, e.target as string)

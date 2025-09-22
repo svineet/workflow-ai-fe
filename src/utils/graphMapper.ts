@@ -57,4 +57,14 @@ export function mapServerGraphToRF(
   }))
 
   return { nodes, edges }
+}
+
+export function mapRFToServerGraph(nodes: Node[], edges: Edge[]): any {
+  const sNodes = nodes.map((n) => {
+    const typeName = (n as any)?.data?.typeName || (n as any)?.data?.label || 'unknown'
+    const settings = (n as any)?.data?.params || {}
+    return { id: n.id, type: String(typeName), settings }
+  })
+  const sEdges = edges.map((e, idx) => ({ id: e.id || `${e.source}-${e.target}-${idx}` as string, from: e.source as string, to: e.target as string }))
+  return { nodes: sNodes, edges: sEdges }
 } 

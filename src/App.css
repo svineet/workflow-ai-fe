@@ -117,27 +117,31 @@
 .neo-table tr > th:last-child, .neo-table tr > td:last-child { border-right: 2px solid #000; }
 .neo-table .neo-button { color: #000; background: #fff; border: 2px solid #000; }
 
-/* IDE layout */
-.ide-layout {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  grid-template-rows: 1fr auto;
-  grid-template-areas:
-    "canvas inspector"
-    "console console";
-  gap: 12px;
-  height: calc(100vh - var(--nav-height));
-  padding: 0;
-  margin: 0;
-}
-.ide-layout.no-sidebar { grid-template-columns: 1fr 280px; grid-template-areas: "canvas inspector" "console console"; }
-.ide-layout.no-sidebar .ide-sidebar { display: none; }
+/* IDE layout variants for collapsible inspector */
+.ide-layout { display: grid; gap: 12px; height: calc(100vh - var(--nav-height)); padding: 0; margin: 0; grid-template-rows: 1fr auto; }
+.ide-layout.inspector-open { grid-template-columns: 1fr 320px; grid-template-areas: "canvas inspector" "console console"; }
+.ide-layout:not(.inspector-open) { grid-template-columns: 1fr; grid-template-areas: "canvas" "console"; }
 .ide-inspector { grid-area: inspector; border: 3px solid #000; padding: 12px; background: #fff; overflow: auto; }
+
+/* Canvas and frame */
 .ide-canvas { grid-area: canvas; border: none; background: repeating-linear-gradient(45deg, #f9f9f9, #f9f9f9 10px, #ffffff 10px, #ffffff 20px); position: relative; }
-.canvas-frame { height: 100%; width: 100%; }
-.minimap { border: 2px solid #000; }
-/* Console: top border only, collapsible */
+.canvas-frame { height: 100%; width: 100%; position: relative; }
+
+/* Toggles */
+.toolbox-toggle { position: absolute; left: 8px; top: 8px; z-index: 20; border: 3px solid #000; background: #fff; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; line-height: 0; }
+.toolbox-toggle svg { display: block; }
+/* Place inspector toggle at canvas right edge. Shift left slightly when inspector is open to avoid overlap with the inspector border. */
+.inspector-toggle { position: absolute; top: 8px; z-index: 20; border: 3px solid #000; background: #fff; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; line-height: 0; }
+.ide-layout.inspector-open .inspector-toggle { right: 336px; }
+.ide-layout:not(.inspector-open) .inspector-toggle { right: 8px; }
+
+/* Floating toolbox panel (left) */
+.toolbox-panel { position: absolute; left: 8px; top: 52px; bottom: 8px; width: 300px; max-width: 90vw; z-index: 19; border: 3px solid #000; background: #fff; padding: 12px; overflow: auto; }
+
+/* Console remains bottom, top border only */
 .ide-console { grid-area: console; border: 0; border-top: 3px solid #000; padding: 8px; background: #fff; overflow: hidden; }
+
+/* Console header, toggle and collapsed behavior */
 .ide-console .console-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .ide-console .toggle { border: 3px solid #000; background: #fff; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; line-height: 0; }
 .ide-console .toggle svg { display: block; }
@@ -150,10 +154,8 @@
 .console-lines { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.4; }
 .console-line { padding: 2px 0; }
 
-/* Floating toolbox */
-.toolbox-toggle { position: absolute; left: 8px; top: 8px; z-index: 20; border: 3px solid #000; background: #fff; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; line-height: 0; }
-.toolbox-toggle svg { display: block; }
-.toolbox-panel { position: absolute; left: 8px; top: 52px; bottom: 8px; width: 300px; max-width: 90vw; z-index: 19; border: 3px solid #000; background: #fff; padding: 12px; overflow: auto; }
+/* Floating inspector */
+.inspector-panel { position: absolute; right: 8px; top: 52px; bottom: 8px; width: 320px; max-width: 90vw; z-index: 19; border: 3px solid #000; background: #fff; padding: 12px; overflow: auto; }
 
 /* Logs view */
 .log-view { max-height: 60vh; overflow: auto; background: #000; color: #c6ff3e; padding: 8px; border: 3px solid #000; }
@@ -170,7 +172,7 @@
 .top-nav { position: sticky; top: 0; z-index: 1000; width: 100%; height: 56px; box-sizing: border-box; background: #fff; }
 .nav-offset { height: 6px; }
 .ide-canvas { position: relative; }
-.run-button { position: absolute; top: 8px; right: 8px; z-index: 10; background: #ff3eb5; color: #fff; }
+.run-button { position: initial; background: #ff3eb5; color: #fff; }
 .block-item { display: flex; align-items: center; gap: 8px; color: #111; }
 .health-badge { border: 2px solid #000; padding: 4px 8px; margin-left: 8px; background: #fff; font-size: 12px; }
 
@@ -207,3 +209,22 @@
 /* Remove unwanted top margins on headings */
 h1, h2, h3, h4 { margin-top: 0; }
 .header-row h2 { margin: 0; }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spinner { width: 14px; height: 14px; border: 3px solid #000; border-right-color: transparent; border-radius: 50%; display: inline-block; animation: spin 0.9s linear infinite; }
+
+/* live indicator */
+.live-dot { width: 10px; height: 10px; border: 2px solid #000; border-radius: 50%; display: inline-block; background: #999; }
+.live-dot.live-sse { background: #22c55e; }
+.live-dot.live-poll { background: #f59e0b; }
+.live-dot.live-idle { background: #9ca3af; }
+
+/* Top-right action bar inside canvas */
+.ide-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 8px; z-index: 20; }
+/* Run button no longer needs absolute positioning since it's inside .ide-actions */
+.run-button { position: initial; background: #ff3eb5; color: #fff; }
+/* Inspector toggle inside action bar; drop state-based right offsets */
+.inspector-toggle { position: initial; }
+
+@keyframes glowPulse { 0% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 0 rgba(198,255,62,0.0); } 50% { box-shadow: 0 0 0 2px var(--accent), 0 0 12px 6px rgba(198,255,62,0.45); } 100% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 0 rgba(198,255,62,0.0); } }
+.glow-lime { border-color: var(--accent) !important; animation: glowPulse 1.2s ease-in-out infinite; }
