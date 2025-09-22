@@ -115,23 +115,23 @@ function IDE() {
 
   // Update nodes with runtime data when available
   useEffect(() => {
-    if (!runData?.outputs_json) return
-    
     setNodes((prev) => prev.map((n) => {
+      const outputs = runData?.outputs_json as any | null
       const upstreamData: any = {}
-      // Find edges that target this node and collect upstream outputs
-      edges.filter(e => e.target === n.id).forEach(edge => {
-        const sourceOutput = runData.outputs_json[edge.source]
-        if (sourceOutput) upstreamData[edge.source] = sourceOutput
-      })
-      
+      if (outputs) {
+        // Find edges that target this node and collect upstream outputs
+        edges.filter(e => e.target === n.id).forEach(edge => {
+          const sourceOutput = outputs[edge.source]
+          if (sourceOutput) upstreamData[edge.source] = sourceOutput
+        })
+      }
       return {
         ...n,
         data: {
           ...n.data,
           active: activeNodeIds.has(n.id),
-          runData: runData,
-          upstreamData: upstreamData
+          runData: runData || null,
+          upstreamData: upstreamData,
         }
       }
     }))
@@ -334,6 +334,11 @@ function IDE() {
       setActiveNodeIds(new Set())
       setRunData(null)
       lastLogIdRef.current = 0
+      // Clear any prior runData/upstreamData from nodes to avoid stale Show output
+      setNodes((prev) => prev.map((n) => ({
+        ...n,
+        data: { ...n.data, runData: null, upstreamData: {} }
+      })))
       const resp = await apiClient.startRun(Number(workflowId), {})
       setCurrentRunId(resp.id)
       // fetch fresh run data baseline immediately so Show nodes can render if very fast
