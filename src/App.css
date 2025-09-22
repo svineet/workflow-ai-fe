@@ -226,5 +226,10 @@ h1, h2, h3, h4 { margin-top: 0; }
 /* Inspector toggle inside action bar; drop state-based right offsets */
 .inspector-toggle { position: initial; }
 
-@keyframes glowPulse { 0% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 0 rgba(198,255,62,0.0); } 50% { box-shadow: 0 0 0 2px var(--accent), 0 0 12px 6px rgba(198,255,62,0.45); } 100% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 0 rgba(198,255,62,0.0); } }
-.glow-lime { border-color: var(--accent) !important; animation: glowPulse 1.2s ease-in-out infinite; }
+/* Active node glow */
+@keyframes glow {
+  0% { box-shadow: 0 0 0 0 rgba(198, 255, 62, 0.0); }
+  50% { box-shadow: 0 0 0 6px rgba(198, 255, 62, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(198, 255, 62, 0.0); }
+}
+.config-node.active { animation: glow 1.2s ease-in-out infinite; border-color: var(--accent) !important; }

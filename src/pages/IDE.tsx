@@ -84,12 +84,10 @@ function IDE() {
           const laid = layoutGraph(rawNodes.map((n) => ({ ...n, position: { x: n.position.x, y: n.position.y } })), rawEdges)
           setNodes(laid.nodes)
           setEdges(laid.edges)
-          setTimeout(() => rfRef.current?.fitView({ padding: 0.15 }), 0)
         } else {
           const laid = layoutGraph(blocks.defaultNodes as any, blocks.defaultEdges as any)
           setNodes(laid.nodes)
           setEdges(laid.edges)
-          setTimeout(() => rfRef.current?.fitView({ padding: 0.15 }), 0)
         }
         setSpecs((specsResp.blocks as unknown as any[]) || [])
       } catch (e: any) {
@@ -143,21 +141,16 @@ function IDE() {
   const appendLogLines = useCallback((entries: LogEntry[]) => {
     if (!entries || entries.length === 0) return
     const newLines: string[] = []
-    const nextActive = new Set(activeNodeIds)
     let maxId = lastLogIdRef.current
     for (const e of entries) {
       if (e.id <= lastLogIdRef.current) continue
       maxId = Math.max(maxId, e.id)
       const line = `${e.ts} [${e.level}]${e.node_id ? ` (${e.node_id})` : ''} ${e.message}`
       newLines.push(line)
-      const msg = e.message || ''
-      if (msg.startsWith('Starting node') && e.node_id) nextActive.add(e.node_id)
-      if ((msg.startsWith('Finished node') || msg.includes('failed')) && e.node_id) nextActive.delete(e.node_id)
     }
     if (newLines.length) setLiveLogs((prev) => [...prev, ...newLines])
     lastLogIdRef.current = maxId
-    setActiveNodeIds(nextActive)
-  }, [activeNodeIds])
+  }, [])
 
   const appendErrorLine = useCallback((text: string) => {
     const ts = new Date().toISOString()
@@ -176,6 +169,7 @@ function IDE() {
     if (pollTimersRef.current.logs) { clearInterval(pollTimersRef.current.logs); pollTimersRef.current.logs = null }
     if (pollTimersRef.current.status) { clearInterval(pollTimersRef.current.status); pollTimersRef.current.status = null }
     setConnMode('idle')
+    setActiveNodeIds(new Set()) // Clear highlights when streaming stops
   }, [])
 
   const startPolling = useCallback((runId: number) => {
@@ -227,7 +221,10 @@ function IDE() {
           } else if (data?.type === 'status') {
             statusRef.current = data.status
             appendInfoLine(`Run status: ${data.status}`)
-            if (data.status === 'succeeded' || data.status === 'failed') stopStreaming()
+            if (data.status === 'succeeded' || data.status === 'failed') {
+              setActiveNodeIds(new Set()) // Clear highlights on completion
+              stopStreaming()
+            }
           }
         } catch (err: any) {
           console.error('SSE onmessage parse error', err, ev?.data)
@@ -318,7 +315,6 @@ function IDE() {
         <section className="ide-canvas">
           <div className="canvas-frame">
             <button className="neo-button toolbox-toggle" onClick={() => setToolboxOpen((v) => !v)}><FaCog size={16} /></button>
-            <button className="neo-button inspector-toggle" onClick={() => { setInspectorOpen((v) => !v); setTimeout(() => rfRef.current?.fitView({ padding: 0.15 }), 0) }}><FaSearch size={16} /></button>
             <div className="ide-actions">
               <button className="neo-button run-button" onClick={handleRun}>Run</button>
               <button className="neo-button inspector-toggle" onClick={() => setInspectorOpen((v) => !v)}>

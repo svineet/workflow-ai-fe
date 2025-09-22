@@ -70,7 +70,7 @@ const ConfigNode = memo((props: NodeProps) => {
   keys.sort((a, b) => (required.includes(a) === required.includes(b)) ? a.localeCompare(b) : (required.includes(a) ? -1 : 1))
 
   return (
-    <div className={isActive ? 'glow-lime' : undefined} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
+    <div className={`config-node${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
       <Handle type="target" position={Position.Left} />
       <div style={{ fontWeight: 800, marginBottom: 6 }}>{data?.label || data?.typeName}</div>
       <div style={{ borderTop: '3px solid #000', marginBottom: 8 }} />
