@@ -7,7 +7,7 @@ import { getMockLogsForIDE } from '../mocks/logs.ts'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { API_BASE_URL } from '../api/config'
-import type { LogEntry } from '../api/types'
+import type { LogEntry, RunResponse } from '../api/types'
 import { FaCog, FaChevronDown, FaChevronUp, FaChevronLeft, FaChevronRight } from 'react-icons/fa'
 import { useModal } from '../context/ModalContext'
 import ConfigNode from '../nodes/ConfigNode'
@@ -61,13 +61,17 @@ function IDE() {
 
   // Live run streaming state
   const [currentRunId, setCurrentRunId] = useState<number | null>(null)
-  const [runData, setRunData] = useState<any>(null)
+  const [runStore, setRunStore] = useState<Record<number, RunResponse>>({})
+  const currentRunIdRef = useRef<number | null>(null)
   const [liveLogs, setLiveLogs] = useState<string[]>([])
   const [activeNodeIds, setActiveNodeIds] = useState<Set<string>>(new Set())
   const lastLogIdRef = useRef<number>(0)
   const statusRef = useRef<string>('')
   const pollTimersRef = useRef<{ logs: any | null; status: any | null }>({ logs: null, status: null })
   const esRef = useRef<EventSource | null>(null)
+
+  // Derived current run data
+  const runData = useMemo(() => (currentRunId && runStore[currentRunId]) ? runStore[currentRunId] : null, [currentRunId, runStore])
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) || null, [nodes, selectedNodeId])
 
@@ -249,19 +253,21 @@ function IDE() {
             setActiveNodeIds(new Set([data.node_id]))
           } else if ((data?.type === 'node_finished' || data?.type === 'node_failed') && data?.node_id) {
             setActiveNodeIds((prev) => { const s = new Set(prev); s.delete(data.node_id); return s })
-            const rid = currentRunId || runId
-            if (rid) {
-              apiClient.getRun(rid).then(finalRun => setRunData(finalRun)).catch(() => {})
+            const rid = currentRunIdRef.current || runId
+            if (rid && rid === (currentRunIdRef.current)) {
+              apiClient.getRun(rid).then(finalRun => {
+                setRunStore((store) => ({ ...store, [rid]: finalRun }))
+              }).catch(() => {})
             }
           } else if (data?.type === 'status') {
             statusRef.current = data.status
             appendInfoLine(`Run status: ${data.status}`)
             if (data.status === 'succeeded' || data.status === 'failed') {
               // Fetch final run data with outputs when completed
-              const rid = currentRunId || runId
-              if (rid) {
+              const rid = currentRunIdRef.current || runId
+              if (rid && rid === (currentRunIdRef.current)) {
                 try {
-                  apiClient.getRun(rid).then(finalRun => setRunData(finalRun)).catch(console.error)
+                  apiClient.getRun(rid).then(finalRun => setRunStore((store) => ({ ...store, [rid]: finalRun }))).catch(console.error)
                 } catch {}
               }
               setActiveNodeIds(new Set()) // Clear highlights on completion
@@ -284,7 +290,7 @@ function IDE() {
       appendErrorLine('SSE init error; switching to polling')
       startPolling(runId)
     }
-  }, [appendLogLines, startPolling, stopStreaming, appendErrorLine, appendInfoLine, currentRunId])
+  }, [appendLogLines, startPolling, stopStreaming, appendErrorLine, appendInfoLine])
 
   const handleAddBlock = useCallback((blockType: string) => {
     setNodes((prev) => {
@@ -332,7 +338,8 @@ function IDE() {
     try {
       setLiveLogs([])
       setActiveNodeIds(new Set())
-      setRunData(null)
+      // Clear all prior runs completely
+      setRunStore({})
       lastLogIdRef.current = 0
       // Clear any prior runData/upstreamData from nodes to avoid stale Show output
       setNodes((prev) => prev.map((n) => ({
@@ -341,14 +348,15 @@ function IDE() {
       })))
       const resp = await apiClient.startRun(Number(workflowId), {})
       setCurrentRunId(resp.id)
+      currentRunIdRef.current = resp.id
       // fetch fresh run data baseline immediately so Show nodes can render if very fast
-      try { const r = await apiClient.getRun(resp.id); setRunData(r) } catch {}
+      try { const r = await apiClient.getRun(resp.id); setRunStore((s) => ({ ...s, [resp.id]: r })) } catch {}
       // immediate first pull of logs to populate console quickly
       startSSE(resp.id)
     } catch (e: any) {
       open({ title: 'Failed to start run', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
     }
-  }, [workflowId, open, startSSE, appendInfoLine, appendLogLines, currentRunId])
+  }, [workflowId, open, startSSE])
 
   return (
     <div className="page-ide" style={{padding: 0, margin: 0}}>
@@ -490,35 +498,36 @@ function IDE() {
                     Run #{runData.id} ({runData.status}) {currentRunId === runData.id ? '(current)' : '(latest)'}
                   </div>
                   
-                  {runData.outputs_json[selectedNode.id] && (
+                  {(runData.outputs_json as any)[selectedNode.id] && (
                     <div style={{marginBottom:12}}>
                       <div style={{fontWeight:700, fontSize:14, marginBottom:4}}>Node Output:</div>
                       <code style={{fontSize:11, display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'#e8f5e8', padding:6, border:'1px solid #90ee90'}}>
-                        {JSON.stringify(runData.outputs_json[selectedNode.id], null, 2)}
+                        {JSON.stringify((runData.outputs_json as any)[selectedNode.id], null, 2)}
                       </code>
                     </div>
                   )}
                   
                   <div style={{marginBottom:8}}>
                     <div style={{fontWeight:700, fontSize:14, marginBottom:4}}>Node Inputs:</div>
-                    {(() => {
+                    {(((): JSX.Element => {
+                      const outputs = (runData.outputs_json || {}) as any
                       const upstreamOutputs: any = {}
                       // Find edges that target this node
                       edges.filter(e => e.target === selectedNode.id).forEach(edge => {
-                        const sourceOutput = runData.outputs_json[edge.source]
+                        const sourceOutput = outputs[edge.source]
                         if (sourceOutput) upstreamOutputs[edge.source] = sourceOutput
                       })
                       const nodeInputs = {
                         settings: selectedNode.data?.params || {},
                         upstream: upstreamOutputs,
-                        trigger: runData.trigger_payload_json || {}
+                        trigger: {},
                       }
                       return (
                         <code style={{fontSize:11, display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'#f0f8ff', padding:6, border:'1px solid #87ceeb'}}>
                           {JSON.stringify(nodeInputs, null, 2)}
                         </code>
                       )
-                    })()}
+                    }))()}
                   </div>
                 </div>
               )}

@@ -104,7 +104,14 @@ const ConfigNode = memo((props: NodeProps) => {
     const backendRendered: string | undefined = runData?.outputs_json?.[id]?.data?.rendered || runData?.outputs_json?.[id]?.rendered
     if (backendRendered && typeof backendRendered === 'string') {
       showOutput = (
-        <div className="show-node-output">
+        <div
+          className="show-node-output"
+          onWheel={(e) => { e.stopPropagation() }}
+          onMouseDown={(e) => { e.stopPropagation() }}
+          onPointerDown={(e) => { e.stopPropagation() }}
+          onTouchStart={(e) => { e.stopPropagation() }}
+          style={{ overscrollBehavior: 'contain' }}
+        >
           <ReactMarkdown>{backendRendered}</ReactMarkdown>
         </div>
       )
@@ -121,7 +128,14 @@ const ConfigNode = memo((props: NodeProps) => {
         const rendered = renderTemplate(template, context)
         if (rendered) {
           showOutput = (
-            <div className="show-node-output">
+            <div
+              className="show-node-output"
+              onWheel={(e) => { e.stopPropagation() }}
+              onMouseDown={(e) => { e.stopPropagation() }}
+              onPointerDown={(e) => { e.stopPropagation() }}
+              onTouchStart={(e) => { e.stopPropagation() }}
+              style={{ overscrollBehavior: 'contain' }}
+            >
               <ReactMarkdown>{rendered}</ReactMarkdown>
             </div>
           )
@@ -140,10 +154,7 @@ const ConfigNode = memo((props: NodeProps) => {
   return (
     <div className={`config-node${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
       <Handle type="target" position={Position.Left} />
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 6 }}>
-        <div style={{ fontWeight: 800 }}>{data?.label || data?.typeName}</div>
-        <span className="pill-muted" style={{ fontSize: 10, marginLeft: 4 }}>#{id}</span>
-      </div>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>{data?.label || data?.typeName}</div>
       <div style={{ borderTop: '3px solid #000', marginBottom: 8 }} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
         {keys.map((k) => (
