@@ -48,7 +48,10 @@ function IDE() {
   const [specs, setSpecs] = useState<BlockSpec[] | null>(null)
   const [query, setQuery] = useState<string>("")
   const [toolboxOpen, setToolboxOpen] = useState<boolean>(false)
-  const [inspectorOpen, setInspectorOpen] = useState<boolean>(true)
+  const [inspectorPanelOpen, setInspectorPanelOpen] = useState<boolean>(true)
+  const [inspectorSectionOpen, setInspectorSectionOpen] = useState<boolean>(true)
+  const [schemaOpen, setSchemaOpen] = useState<boolean>(false)
+  const [runtimeOpen, setRuntimeOpen] = useState<boolean>(false)
   const consoleRef = useRef<HTMLDivElement | null>(null)
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true)
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -58,6 +61,7 @@ function IDE() {
 
   // Live run streaming state
   const [currentRunId, setCurrentRunId] = useState<number | null>(null)
+  const [runData, setRunData] = useState<any>(null)
   const [liveLogs, setLiveLogs] = useState<string[]>([])
   const [activeNodeIds, setActiveNodeIds] = useState<Set<string>>(new Set())
   const lastLogIdRef = useRef<number>(0)
@@ -109,6 +113,30 @@ function IDE() {
     consoleRef.current.scrollTop = consoleRef.current.scrollHeight
   }, [liveLogs.length])
 
+  // Update nodes with runtime data when available
+  useEffect(() => {
+    if (!runData?.outputs_json) return
+    
+    setNodes((prev) => prev.map((n) => {
+      const upstreamData: any = {}
+      // Find edges that target this node and collect upstream outputs
+      edges.filter(e => e.target === n.id).forEach(edge => {
+        const sourceOutput = runData.outputs_json[edge.source]
+        if (sourceOutput) upstreamData[edge.source] = sourceOutput
+      })
+      
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          active: activeNodeIds.has(n.id),
+          runData: runData,
+          upstreamData: upstreamData
+        }
+      }
+    }))
+  }, [runData, activeNodeIds, edges])
+
   useEffect(() => {
     setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, active: activeNodeIds.has(n.id) } })))
   }, [activeNodeIds])
@@ -120,6 +148,10 @@ function IDE() {
   const onSelectionChange = useCallback((params: { nodes: Node[]; edges: Edge[] }) => {
     const sel = params?.nodes && params.nodes[0]
     setSelectedNodeId(sel ? sel.id : null)
+    if (sel) {
+      setInspectorPanelOpen(true)
+      setInspectorSectionOpen(true)
+    }
   }, [])
 
   const nodeTypes = useMemo(() => ({ config: ConfigNode }), [])
@@ -205,9 +237,8 @@ function IDE() {
     try {
       const es = new EventSource(`${API_BASE_URL}/runs/${runId}/stream`)
       esRef.current = es
-      es.onopen = () => { setConnMode('sse'); console.log('SSE open'); appendInfoLine('SSE connected') }
+      es.onopen = () => { setConnMode('sse') }
       es.onmessage = (ev) => {
-        console.log('SSE message', ev?.data)
         try {
           const data = JSON.parse(ev.data)
           if (Array.isArray(data)) {
@@ -218,10 +249,21 @@ function IDE() {
             setActiveNodeIds(new Set([data.node_id]))
           } else if ((data?.type === 'node_finished' || data?.type === 'node_failed') && data?.node_id) {
             setActiveNodeIds((prev) => { const s = new Set(prev); s.delete(data.node_id); return s })
+            const rid = currentRunId || runId
+            if (rid) {
+              apiClient.getRun(rid).then(finalRun => setRunData(finalRun)).catch(() => {})
+            }
           } else if (data?.type === 'status') {
             statusRef.current = data.status
             appendInfoLine(`Run status: ${data.status}`)
             if (data.status === 'succeeded' || data.status === 'failed') {
+              // Fetch final run data with outputs when completed
+              const rid = currentRunId || runId
+              if (rid) {
+                try {
+                  apiClient.getRun(rid).then(finalRun => setRunData(finalRun)).catch(console.error)
+                } catch {}
+              }
               setActiveNodeIds(new Set()) // Clear highlights on completion
               stopStreaming()
             }
@@ -242,7 +284,7 @@ function IDE() {
       appendErrorLine('SSE init error; switching to polling')
       startPolling(runId)
     }
-  }, [appendLogLines, startPolling, stopStreaming, appendErrorLine, appendInfoLine])
+  }, [appendLogLines, startPolling, stopStreaming, appendErrorLine, appendInfoLine, currentRunId])
 
   const handleAddBlock = useCallback((blockType: string) => {
     setNodes((prev) => {
@@ -290,35 +332,30 @@ function IDE() {
     try {
       setLiveLogs([])
       setActiveNodeIds(new Set())
+      setRunData(null)
       lastLogIdRef.current = 0
       const resp = await apiClient.startRun(Number(workflowId), {})
       setCurrentRunId(resp.id)
-      appendInfoLine(`RUN ${resp.id} started`)
-      // quick initial fetch to populate console immediately
-      try {
-        const firstLogs = await apiClient.getRunLogs(resp.id)
-        appendLogLines(firstLogs)
-      } catch (e: any) {
-        console.error('Initial logs fetch error', e)
-      }
-      // start streaming
+      // fetch fresh run data baseline immediately so Show nodes can render if very fast
+      try { const r = await apiClient.getRun(resp.id); setRunData(r) } catch {}
+      // immediate first pull of logs to populate console quickly
       startSSE(resp.id)
     } catch (e: any) {
       open({ title: 'Failed to start run', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
     }
-  }, [workflowId, open, startSSE, appendInfoLine, appendLogLines])
+  }, [workflowId, open, startSSE, appendInfoLine, appendLogLines, currentRunId])
 
   return (
     <div className="page-ide" style={{padding: 0, margin: 0}}>
       <div className="nav-offset" />
-      <div className={`ide-layout ${inspectorOpen ? 'inspector-open' : ''}`}>
+      <div className={`ide-layout ${inspectorPanelOpen ? 'inspector-open' : ''}`}>
         <section className="ide-canvas">
           <div className="canvas-frame">
             <button className="neo-button toolbox-toggle" onClick={() => setToolboxOpen((v) => !v)}><FaCog size={16} /></button>
             <div className="ide-actions">
               <button className="neo-button run-button" onClick={handleRun}>Run</button>
-              <button className="neo-button inspector-toggle" onClick={() => setInspectorOpen((v) => !v)}>
-                {inspectorOpen ? <FaChevronRight size={16} /> : <FaChevronLeft size={16} />}
+              <button className="neo-button inspector-toggle" onClick={() => setInspectorPanelOpen((v) => !v)}>
+                {inspectorPanelOpen ? <FaChevronRight size={16} /> : <FaChevronLeft size={16} />}
               </button>
             </div>
             {toolboxOpen && (
@@ -366,33 +403,119 @@ function IDE() {
           </div>
         </section>
 
-        {inspectorOpen && (
+        {inspectorPanelOpen && (
           <aside className="ide-inspector">
-            <div className="sidebar-section">
-              <div className="section-title">Inspector</div>
-              {selectedNode ? (
-                <div className="neo-card">
-                  <div><strong>ID:</strong> {selectedNode.id}</div>
-                  <div><strong>Label:</strong> {selectedNode.data?.label ?? '—'}</div>
-                  <div><strong>Type:</strong> {selectedNode.type ?? 'default'}</div>
-                  <div><strong>Position:</strong> {Math.round(selectedNode.position.x)}, {Math.round(selectedNode.position.y)}</div>
-                  {selectedNode.data?.schema && (
-                    <div style={{marginTop:8}}>
-                      <div style={{fontWeight:900, borderBottom:'2px solid #000', marginBottom:6}}>Properties</div>
-                      {Object.entries((selectedNode.data?.params || {})).map(([k, val]) => {
-                        const str = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '')
-                        return (
-                          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                            <span style={{ fontWeight: 900 }}>{k}</span>
-                            <code style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12 }}>{str}</code>
-                          </div>
-                        )
-                      })}
+            {/* Inspector Accordion */}
+            <div className="sidebar-section accordion-section">
+              <div className="section-title" style={{cursor:'pointer', display:'flex', alignItems:'center', gap:8}} onClick={() => setInspectorSectionOpen(!inspectorSectionOpen)}>
+                <span>{inspectorSectionOpen ? '▼' : '▶'}</span>
+                <span>Inspector</span>
+              </div>
+              {inspectorSectionOpen && (
+                <div style={{padding:12}}>
+                  {selectedNode ? (
+                    <div>
+                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                        <div><strong>Label:</strong> {selectedNode.data?.label ?? '—'}</div>
+                        <span className="pill-muted" style={{fontSize:11}}>#{selectedNode.id}</span>
+                      </div>
+                      <div style={{marginTop:4}}><strong>Type:</strong> {selectedNode.type ?? 'default'}</div>
+                      <div><strong>Position:</strong> {Math.round(selectedNode.position.x)}, {Math.round(selectedNode.position.y)}</div>
+                      
+                      {/* Current Settings */}
+                      {selectedNode.data?.schema && (
+                        <div style={{marginTop:12}}>
+                          <div style={{fontWeight:900, borderBottom:'2px solid #000', marginBottom:6}}>Current Settings</div>
+                          {Object.entries((selectedNode.data?.params || {})).map(([k, val]) => {
+                            const str = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '')
+                            return (
+                              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontWeight: 900 }}>{k}</span>
+                                <code style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12 }}>{str}</code>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="muted">Select a node to inspect</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Schema Accordion */}
+            <div className="sidebar-section accordion-section">
+              <div className="section-title" style={{cursor:'pointer', display:'flex', alignItems:'center', gap:8}} onClick={() => setSchemaOpen(!schemaOpen)}>
+                <span>{schemaOpen ? '▼' : '▶'}</span>
+                <span>Schema</span>
+              </div>
+              {schemaOpen && selectedNode?.data?.schema && (
+                <div style={{padding:12}}>
+                  {selectedNode.data.schema.settings_schema && (
+                    <div style={{marginBottom:12}}>
+                      <div style={{fontWeight:700, fontSize:14, marginBottom:4}}>Settings Schema:</div>
+                      <code style={{fontSize:11, display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'#f5f5f5', padding:6, border:'1px solid #ccc'}}>
+                        {JSON.stringify(selectedNode.data.schema.settings_schema, null, 2)}
+                      </code>
+                    </div>
+                  )}
+                  {selectedNode.data.schema.output_schema && (
+                    <div style={{marginBottom:8}}>
+                      <div style={{fontWeight:700, fontSize:14, marginBottom:4}}>Output Schema:</div>
+                      <code style={{fontSize:11, display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'#f5f5f5', padding:6, border:'1px solid #ccc'}}>
+                        {JSON.stringify(selectedNode.data.schema.output_schema, null, 2)}
+                      </code>
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="neo-card muted">Select a node to inspect</div>
+              )}
+            </div>
+
+            {/* Runtime Data Accordion */}
+            <div className="sidebar-section accordion-section">
+              <div className="section-title" style={{cursor:'pointer', display:'flex', alignItems:'center', gap:8}} onClick={() => setRuntimeOpen(!runtimeOpen)}>
+                <span>{runtimeOpen ? '▼' : '▶'}</span>
+                <span>Runtime Data</span>
+              </div>
+              {runtimeOpen && runData?.outputs_json && selectedNode && (
+                <div style={{padding:12}}>
+                  <div style={{fontSize:12, marginBottom:8, color:'#666'}}>
+                    Run #{runData.id} ({runData.status}) {currentRunId === runData.id ? '(current)' : '(latest)'}
+                  </div>
+                  
+                  {runData.outputs_json[selectedNode.id] && (
+                    <div style={{marginBottom:12}}>
+                      <div style={{fontWeight:700, fontSize:14, marginBottom:4}}>Node Output:</div>
+                      <code style={{fontSize:11, display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'#e8f5e8', padding:6, border:'1px solid #90ee90'}}>
+                        {JSON.stringify(runData.outputs_json[selectedNode.id], null, 2)}
+                      </code>
+                    </div>
+                  )}
+                  
+                  <div style={{marginBottom:8}}>
+                    <div style={{fontWeight:700, fontSize:14, marginBottom:4}}>Node Inputs:</div>
+                    {(() => {
+                      const upstreamOutputs: any = {}
+                      // Find edges that target this node
+                      edges.filter(e => e.target === selectedNode.id).forEach(edge => {
+                        const sourceOutput = runData.outputs_json[edge.source]
+                        if (sourceOutput) upstreamOutputs[edge.source] = sourceOutput
+                      })
+                      const nodeInputs = {
+                        settings: selectedNode.data?.params || {},
+                        upstream: upstreamOutputs,
+                        trigger: runData.trigger_payload_json || {}
+                      }
+                      return (
+                        <code style={{fontSize:11, display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word', background:'#f0f8ff', padding:6, border:'1px solid #87ceeb'}}>
+                          {JSON.stringify(nodeInputs, null, 2)}
+                        </code>
+                      )
+                    })()}
+                  </div>
+                </div>
               )}
             </div>
           </aside>
