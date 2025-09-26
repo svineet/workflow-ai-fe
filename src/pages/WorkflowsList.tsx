@@ -121,7 +121,7 @@ function WorkflowsList() {
         <div className="grid">
           {cards.map((w) => (
             <div key={w.id} className="neo-card">
-              <div className="card-title link"><NavLink to={`/workflows/${w.id}`}>{w.name}</NavLink></div>
+              <div className="card-title link"><NavLink to={`/ide/${w.id}`}>{w.name}</NavLink></div>
               <div className="muted desc-min">Updated {new Date(w.updatedAt).toLocaleString()}</div>
               <div className="card-actions">
                 <NavLink to={`/ide/${w.id}`} className="neo-button success" style={{flex:1, display:'flex', alignItems:'center', gap:8}}><FaWrench /> Edit in IDE</NavLink>

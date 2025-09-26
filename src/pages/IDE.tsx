@@ -11,8 +11,10 @@ import type { LogEntry, RunResponse } from '../api/types'
 import { FaCog, FaChevronDown, FaChevronUp, FaChevronLeft, FaChevronRight } from 'react-icons/fa'
 import { useModal } from '../context/ModalContext'
 import ConfigNode from '../nodes/ConfigNode'
+import AgentNode from '../nodes/AgentNode.tsx'
+import ToolNode from '../nodes/ToolNode.tsx'
 import { layoutGraph } from '../utils/layout'
-import { mapServerGraphToRF, specsToMap, mapRFToServerGraph } from '../utils/graphMapper'
+import { mapServerGraphToRF, specsToMap, mapRFToServerGraph, computeAgentTools } from '../utils/graphMapper'
 
 function typeToIcon(t: string): string {
   if (t.startsWith('http')) return '↗'
@@ -38,12 +40,25 @@ function extractDefaults(schema: any): Record<string, any> {
   return Object.fromEntries(entries)
 }
 
+// Generate short, easy-to-type node IDs based on block type
+function makeSimpleId(existingIds: Set<string>, typeName: string): string {
+  const baseRaw = String(typeName || 'n')
+  const base = baseRaw.split('.')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'n'
+  if (!existingIds.has(base)) return base
+  for (let i = 2; i < 10000; i++) {
+    const candidate = `${base}${i}`
+    if (!existingIds.has(candidate)) return candidate
+  }
+  return `${base}${Date.now() % 10000}`
+}
+
 function IDE() {
   const { workflowId } = useParams()
   const { open } = useModal()
   const rfRef = useRef<ReactFlowInstance | null>(null)
   const [nodes, setNodes] = useState<Node[]>(blocks.defaultNodes)
   const [edges, setEdges] = useState<Edge[]>(blocks.defaultEdges)
+  const [toolEdges, setToolEdges] = useState<Edge[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [specs, setSpecs] = useState<BlockSpec[] | null>(null)
   const [query, setQuery] = useState<string>("")
@@ -52,12 +67,20 @@ function IDE() {
   const [inspectorSectionOpen, setInspectorSectionOpen] = useState<boolean>(true)
   const [schemaOpen, setSchemaOpen] = useState<boolean>(false)
   const [runtimeOpen, setRuntimeOpen] = useState<boolean>(false)
+  const [graphLoaded, setGraphLoaded] = useState<boolean>(false)
   const consoleRef = useRef<HTMLDivElement | null>(null)
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true)
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const saveTimerRef = useRef<any>(null)
   const lastSavedGraphRef = useRef<string>('')
   const [connMode, setConnMode] = useState<'idle' | 'sse' | 'polling'>('idle')
+ 
+  // Reliable fitView helper that mimics Controls' behavior
+  const fitViewReliable = useCallback(() => {
+    const inst = rfRef.current
+    if (!inst) return
+    try { inst.fitView({ padding: 0.12, includeHiddenNodes: true, duration: 300 }) } catch {}
+  }, [])
 
   // Live run streaming state
   const [currentRunId, setCurrentRunId] = useState<number | null>(null)
@@ -86,16 +109,20 @@ function IDE() {
         const specMap = specsToMap((specsResp.blocks as unknown as any[]) || [])
 
         if (wf && wf.graph) {
-          const { nodes: rawNodes, edges: rawEdges } = mapServerGraphToRF(wf.graph, specMap, (nodeId, nextParams) => {
+          const { nodes: rawNodes, edges: rawEdges, toolEdges: rawToolEdges } = mapServerGraphToRF(wf.graph, specMap, (nodeId, nextParams) => {
             setNodes((prev) => prev.map((pn) => pn.id === nodeId ? { ...pn, data: { ...pn.data, params: nextParams } } : pn))
           })
           const laid = layoutGraph(rawNodes.map((n) => ({ ...n, position: { x: n.position.x, y: n.position.y } })), rawEdges)
           setNodes(laid.nodes)
           setEdges(laid.edges)
+          setToolEdges(rawToolEdges)
+          setGraphLoaded(true)
         } else {
           const laid = layoutGraph(blocks.defaultNodes as any, blocks.defaultEdges as any)
           setNodes(laid.nodes)
           setEdges(laid.edges)
+          setToolEdges([])
+          setGraphLoaded(true)
         }
         setSpecs((specsResp.blocks as unknown as any[]) || [])
       } catch (e: any) {
@@ -106,11 +133,20 @@ function IDE() {
   }, [workflowId, open])
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      try { rfRef.current?.fitView({ padding: 0.2 }) } catch {}
-    }, 0)
+    if (!graphLoaded) return
+    // Try multiple times to account for container/layout settling
+    const t1 = setTimeout(() => { fitViewReliable() }, 0)
+    const t2 = setTimeout(() => { fitViewReliable() }, 150)
+    const t3 = setTimeout(() => { fitViewReliable() }, 400)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+  }, [graphLoaded, fitViewReliable])
+
+  // Also refit when inspector panel toggles (width change affects viewport)
+  useEffect(() => {
+    if (!graphLoaded) return
+    const t = setTimeout(() => { fitViewReliable() }, 150)
     return () => clearTimeout(t)
-  }, [nodes.length, edges.length])
+  }, [inspectorPanelOpen, graphLoaded, fitViewReliable])
 
   useEffect(() => {
     if (!consoleRef.current) return
@@ -119,27 +155,44 @@ function IDE() {
 
   // Update nodes with runtime data when available
   useEffect(() => {
+    if (!runData?.outputs_json) return
+    
+    const outputs = runData.outputs_json as Record<string, any>
+
     setNodes((prev) => prev.map((n) => {
-      const outputs = runData?.outputs_json as any | null
       const upstreamData: any = {}
-      if (outputs) {
-        // Find edges that target this node and collect upstream outputs
-        edges.filter(e => e.target === n.id).forEach(edge => {
-          const sourceOutput = outputs[edge.source]
-          if (sourceOutput) upstreamData[edge.source] = sourceOutput
+      // Find edges that target this node and collect upstream outputs
+      edges.filter(e => e.target === n.id).forEach(edge => {
+        const sourceOutput = outputs[edge.source]
+        if (sourceOutput) upstreamData[edge.source] = sourceOutput
+      })
+      
+      // Compute connected agent ids for tool nodes
+      const connectedAgents: string[] = []
+      if ((n as any)?.type === 'tool') {
+        toolEdges.forEach((e) => {
+          if (e.source === n.id || e.target === n.id) {
+            const other = e.source === n.id ? e.target : e.source
+            const otherNode = prev.find((pn) => pn.id === other)
+            if (otherNode && ((otherNode as any)?.type === 'agent' || (otherNode as any)?.data?.schema?.kind === 'agent')) {
+              if (!connectedAgents.includes(other)) connectedAgents.push(other)
+            }
+          }
         })
       }
+
       return {
         ...n,
         data: {
           ...n.data,
           active: activeNodeIds.has(n.id),
-          runData: runData || null,
+          runData: runData,
           upstreamData: upstreamData,
+          connectedAgents,
         }
       }
     }))
-  }, [runData, activeNodeIds, edges])
+  }, [runData, activeNodeIds, edges, toolEdges])
 
   useEffect(() => {
     setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, active: activeNodeIds.has(n.id) } })))
@@ -148,6 +201,51 @@ function IDE() {
   const onNodesChange = useCallback<OnNodesChange>((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), [])
   const onEdgesChange = useCallback<OnEdgesChange>((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), [])
   const onConnect = useCallback((connection: Connection) => setEdges((eds) => addEdge(connection, eds)), [])
+  
+  // Tool connection validation and add
+  const onConnectStart = undefined
+  const onConnectEnd = undefined
+  const onConnectValidate = useCallback((conn: Connection) => {
+    const { source, target, sourceHandle, targetHandle } = conn
+    const src = nodes.find((n) => n.id === source)
+    const tgt = nodes.find((n) => n.id === target)
+    const isAgentHandle = sourceHandle === 'tools' || targetHandle === 'tools'
+    if (!isAgentHandle) return true // normal control edge
+    const isTool = (n?: Node) => {
+      if (!n) return false
+      const t = String((n as any)?.data?.typeName || '')
+      const spec = (n as any)?.data?.schema
+      const extrasTool = !!spec?.extras?.toolCompatible
+      return t.startsWith('tool.') || extrasTool
+    }
+    const isAgent = (n?: Node) => {
+      if (!n) return false
+      const nodeType = (n as any)?.type
+      const typeName = String((n as any)?.data?.typeName || '')
+      const spec = (n as any)?.data?.schema
+      const hasToolsConnector = Array.isArray(spec?.extras?.connectors) && spec.extras.connectors.some((c: any) => c?.name === 'tools')
+      return nodeType === 'agent' || spec?.kind === 'agent' || typeName.startsWith('agent.') || hasToolsConnector
+    }
+    if (source && target) {
+      const ok = (isAgent(src) && isTool(tgt)) || (isAgent(tgt) && isTool(src))
+      // Prevent duplicate edges between the same pair
+      const dup = toolEdges.some((e) => (e.source === source && e.target === target) || (e.source === target && e.target === source))
+      return !!ok && !dup
+    }
+    return false
+  }, [nodes, toolEdges])
+  const onConnectTool = useCallback((conn: Connection) => {
+    if (!onConnectValidate(conn)) return
+    const id = `tool-${conn.source}-${conn.target}-${Date.now()}`
+    setToolEdges((prev) => [...prev, { id, source: String(conn.source), target: String(conn.target), sourceHandle: conn.sourceHandle, targetHandle: conn.targetHandle, data: { toolEdge: true }, style: { stroke: '#000', strokeWidth: 2 } } as Edge])
+  }, [onConnectValidate])
+
+  // Remove tool edges on delete
+  const onToolEdgesChange: OnEdgesChange = useCallback((changes) => {
+    const removals = changes.filter((c: any) => c.type === 'remove').map((c: any) => c.id)
+    if (removals.length === 0) return
+    setToolEdges((prev) => prev.filter((e) => !removals.includes(e.id)))
+  }, [])
 
   const onSelectionChange = useCallback((params: { nodes: Node[]; edges: Edge[] }) => {
     const sel = params?.nodes && params.nodes[0]
@@ -158,7 +256,7 @@ function IDE() {
     }
   }, [])
 
-  const nodeTypes = useMemo(() => ({ config: ConfigNode }), [])
+  const nodeTypes = useMemo(() => ({ config: ConfigNode, agent: AgentNode, tool: ToolNode }), [])
 
   const paletteItems = specs && specs.length > 0
     ? specs.map((s) => ({ type: s.type, label: s.type, summary: s.summary || '' }))
@@ -207,6 +305,20 @@ function IDE() {
     setConnMode('idle')
     setActiveNodeIds(new Set()) // Clear highlights when streaming stops
   }, [])
+
+  // Persist latest graph immediately (used before Run) to ensure settings like JSON payload are saved as objects
+  const flushSave = useCallback(async () => {
+    if (!workflowId || !Number.isFinite(Number(workflowId))) return
+    const agentTools = computeAgentTools(nodes, toolEdges)
+    const graph = mapRFToServerGraph(nodes, edges, agentTools)
+    const serialized = JSON.stringify(graph)
+    try {
+      await apiClient.updateWorkflow(Number(workflowId), { graph })
+      lastSavedGraphRef.current = serialized
+    } catch (e: any) {
+      throw e
+    }
+  }, [nodes, edges, toolEdges, workflowId])
 
   const startPolling = useCallback((runId: number) => {
     stopStreaming()
@@ -298,7 +410,8 @@ function IDE() {
       const schema = extractSchema(spec)
       const defaults = extractDefaults(schema)
       const hasConfig = !!schema
-      const id = `n-${blockType}-${Date.now()}`
+      const existing = new Set(prev.map((n) => n.id))
+      const id = makeSimpleId(existing, blockType)
       const newNode: Node = {
         id,
         type: hasConfig ? 'config' : undefined,
@@ -316,7 +429,8 @@ function IDE() {
   // Debounced save when nodes/edges or params change
   useEffect(() => {
     if (!workflowId || !Number.isFinite(Number(workflowId))) return
-    const graph = mapRFToServerGraph(nodes, edges)
+    const agentTools = computeAgentTools(nodes, toolEdges)
+    const graph = mapRFToServerGraph(nodes, edges, agentTools)
     const serialized = JSON.stringify(graph)
     if (serialized === lastSavedGraphRef.current) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -331,11 +445,13 @@ function IDE() {
         setSavingState('error')
       }
     }, 600)
-  }, [nodes, edges, workflowId])
+  }, [nodes, edges, toolEdges, workflowId])
 
   const handleRun = useCallback(async () => {
     if (!workflowId || !Number.isFinite(Number(workflowId))) return
     try {
+      // Save current graph/settings to backend to avoid stale or stringified payloads
+      await flushSave()
       setLiveLogs([])
       setActiveNodeIds(new Set())
       // Clear all prior runs completely
@@ -356,7 +472,7 @@ function IDE() {
     } catch (e: any) {
       open({ title: 'Failed to start run', body: e?.message || 'Unknown error', primaryLabel: 'Close' })
     }
-  }, [workflowId, open, startSSE])
+  }, [workflowId, open, startSSE, flushSave])
 
   return (
     <div className="page-ide" style={{padding: 0, margin: 0}}>
@@ -396,16 +512,23 @@ function IDE() {
               </div>
             )}
             <ReactFlow
-              onInit={(inst) => { rfRef.current = inst }}
+              onInit={(inst) => { rfRef.current = inst; setTimeout(() => { fitViewReliable() }, 0) }}
               nodeTypes={nodeTypes}
               nodes={nodes}
-              edges={edges}
+              edges={[...edges, ...toolEdges]}
               onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
+              onEdgesChange={(changes) => { onEdgesChange(changes); onToolEdgesChange(changes as any) }}
+              onConnect={(c) => {
+                if (c.sourceHandle === 'tools' || c.targetHandle === 'tools') onConnectTool(c)
+                else onConnect(c)
+              }}
+              isValidConnection={(c) => {
+                if (c.sourceHandle === 'tools' || c.targetHandle === 'tools') return onConnectValidate(c)
+                return true
+              }}
               onSelectionChange={onSelectionChange}
               fitView
-              fitViewOptions={{ padding: 0.2 }}
+              fitViewOptions={{ padding: 0.12, includeHiddenNodes: true }}
               minZoom={0.2}
               defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
               defaultEdgeOptions={{ animated: false, style: { stroke: '#000', strokeWidth: 2 }, markerEnd: { type: MarkerType.ArrowClosed as any, color: '#000' } }}

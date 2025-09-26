@@ -8,12 +8,41 @@ function toTypeSet(t: any): Set<string> {
   return new Set()
 }
 
-function isJsonLike(schema: any, value: any): boolean {
+function isJsonLike(schema: any, value: any, key?: string): boolean {
   const tset = toTypeSet(schema?.type)
   if (tset.has('object') || tset.has('array')) return true
   if (schema?.properties || schema?.items) return true
   if (schema?.format === 'json' || schema?.contentMediaType === 'application/json') return true
   if (value && typeof value === 'object') return true
+  if (key && /payload|json|data/i.test(key)) return true
+  return false
+}
+
+function normalizeJsonInput(rawText: string): any {
+  if (typeof rawText !== 'string') return rawText
+  let s = rawText.trim()
+  // Strip Python-like raw string prefix and surrounding quotes
+  if ((s.startsWith("r'") && s.endsWith("'")) || (s.startsWith('r"') && s.endsWith('"'))) {
+    s = s.slice(2, -1)
+  } else if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) {
+    s = s.slice(1, -1)
+  }
+  try {
+    return JSON.parse(s)
+  } catch {}
+  // Fallback: try original as-is
+  try {
+    return JSON.parse(rawText)
+  } catch {}
+  return rawText
+}
+
+function looksJsonish(rawText: string): boolean {
+  if (typeof rawText !== 'string') return false
+  const s = rawText.trim()
+  if (!s) return false
+  if (s.startsWith('{') || s.startsWith('[')) return true
+  if ((s.startsWith("r'") && s[2] === '{') || (s.startsWith('r"') && s[2] === '{')) return true
   return false
 }
 
@@ -63,20 +92,26 @@ function renderField(key: string, schema: any, value: any, onChange: (v: any) =>
   if (tset.has('number') || tset.has('integer')) {
     return <input className="neo-input" type="number" value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} />
   }
-  if (isJsonLike(schema, value)) {
+  if (isJsonLike(schema, value, key)) {
     const textValue = value == null ? '' : (typeof value === 'string' ? value : JSON.stringify(value, null, 2))
     return <textarea className="neo-input" rows={6} value={textValue} onChange={(e) => {
       const next = e.target.value
-      try {
-        const parsed = JSON.parse(next)
-        onChange(parsed)
-      } catch {
-        onChange(next)
-      }
+      const normalized = normalizeJsonInput(next)
+      if (typeof normalized === 'string') onChange(next)
+      else onChange(normalized)
     }} />
   }
   if (tset.has('string')) {
-    return <textarea className="neo-input" rows={3} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+    return <textarea className="neo-input" rows={3} value={value ?? ''} onChange={(e) => {
+      const next = e.target.value
+      if (looksJsonish(next)) {
+        const normalized = normalizeJsonInput(next)
+        if (typeof normalized === 'string') onChange(next)
+        else onChange(normalized)
+      } else {
+        onChange(next)
+      }
+    }} />
   }
   return <input className="neo-input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
 }
@@ -154,7 +189,10 @@ const ConfigNode = memo((props: NodeProps) => {
   return (
     <div className={`config-node${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
       <Handle type="target" position={Position.Left} />
-      <div style={{ fontWeight: 800, marginBottom: 6 }}>{data?.label || data?.typeName}</div>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 6 }}>
+        <div style={{ fontWeight: 800 }}>{data?.label || data?.typeName}</div>
+        <span className="pill-muted" style={{ fontSize: 10, marginLeft: 4 }}>#{id}</span>
+      </div>
       <div style={{ borderTop: '3px solid #000', marginBottom: 8 }} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
         {keys.map((k) => (
