@@ -21,7 +21,10 @@ export function layoutGraph(nodes: Node[], edges: Edge[]): { nodes: Node[]; edge
     g.setNode(n.id, { width, height })
   })
   edges.forEach((e) => {
-    g.setEdge(e.source as string, e.target as string)
+    const kind = (e as any)?.data?.kind || 'control'
+    if (kind === 'control') {
+      g.setEdge(e.source as string, e.target as string)
+    }
   })
   dagre.layout(g)
 

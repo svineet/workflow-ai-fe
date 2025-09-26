@@ -1,6 +1,8 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import ReactMarkdown from 'react-markdown'
+import { useState, useMemo } from 'react'
+import { FaChevronDown, FaChevronUp } from 'react-icons/fa'
 
 function toTypeSet(t: any): Set<string> {
   if (Array.isArray(t)) return new Set(t)
@@ -126,6 +128,16 @@ const ConfigNode = memo((props: NodeProps) => {
   const isShowNode = data?.typeName === 'show'
   const runData = data?.runData
   const upstreamData = data?.upstreamData || {}
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(false)
+
+  const { requiredKeys, optionalKeys } = useMemo(() => {
+    const keys = Object.keys(properties)
+    keys.sort((a, b) => (required.includes(a) === required.includes(b)) ? a.localeCompare(b) : (required.includes(a) ? -1 : 1))
+    return {
+      requiredKeys: keys.filter((k) => required.includes(k)),
+      optionalKeys: keys.filter((k) => !required.includes(k)),
+    }
+  }, [properties, required])
 
   const onChangeKey = (k: string, v: any) => {
     if (!data?.onChangeParams) return
@@ -183,9 +195,6 @@ const ConfigNode = memo((props: NodeProps) => {
     }
   }
 
-  const keys = Object.keys(properties)
-  keys.sort((a, b) => (required.includes(a) === required.includes(b)) ? a.localeCompare(b) : (required.includes(a) ? -1 : 1))
-
   return (
     <div className={`config-node${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
       <Handle type="target" position={Position.Left} />
@@ -195,13 +204,34 @@ const ConfigNode = memo((props: NodeProps) => {
       </div>
       <div style={{ borderTop: '3px solid #000', marginBottom: 8 }} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
-        {keys.map((k) => (
+        {requiredKeys.map((k) => (
           <div key={k}>
             {properties[k]?.type !== 'boolean' && <label style={{ fontSize: 12, fontWeight: 700 }}>{k}</label>}
             {renderField(k, properties[k], params[k], (v) => onChangeKey(k, v))}
           </div>
         ))}
       </div>
+
+      {optionalKeys.length > 0 && (
+        <div
+          className="advanced-toggle"
+          onClick={(e) => { e.stopPropagation(); setAdvancedOpen((v) => !v) }}
+        >
+          <span>Advanced</span>
+          <span className="chev" style={{display:'inline-flex', marginLeft: 6}}>{advancedOpen ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}</span>
+        </div>
+      )}
+
+      {advancedOpen && optionalKeys.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6, marginTop: 8 }}>
+          {optionalKeys.map((k) => (
+            <div key={k}>
+              {properties[k]?.type !== 'boolean' && <label style={{ fontSize: 12, fontWeight: 700 }}>{k}</label>}
+              {renderField(k, properties[k], params[k], (v) => onChangeKey(k, v))}
+            </div>
+          ))}
+        </div>
+      )}
       {showOutput}
       <Handle type="source" position={Position.Right} />
     </div>

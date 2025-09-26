@@ -10,6 +10,7 @@ import WorkflowDetail from './pages/WorkflowDetail'
 import Blocks from './pages/Blocks'
 import Templates from './pages/Templates'
 import Integrations from './pages/Integrations'
+import IntegrationsSuccess from './pages/IntegrationsSuccess'
 import Settings from './pages/Settings'
 import Docs from './pages/Docs'
 import NotFound from './pages/NotFound'
@@ -33,6 +34,7 @@ function App() {
               <Route path="/blocks" element={<Blocks />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/integrations" element={<Integrations />} />
+              <Route path="/integrations/success" element={<IntegrationsSuccess />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/docs" element={<Docs />} />
               <Route path="/404" element={<NotFound />} />

@@ -14,7 +14,7 @@ import ConfigNode from '../nodes/ConfigNode'
 import AgentNode from '../nodes/AgentNode.tsx'
 import ToolNode from '../nodes/ToolNode.tsx'
 import { layoutGraph } from '../utils/layout'
-import { mapServerGraphToRF, specsToMap, mapRFToServerGraph, computeAgentTools } from '../utils/graphMapper'
+import { mapServerGraphToRF, specsToMap, mapRFToServerGraph } from '../utils/graphMapper'
 
 function typeToIcon(t: string): string {
   if (t.startsWith('http')) return '↗'
@@ -58,7 +58,6 @@ function IDE() {
   const rfRef = useRef<ReactFlowInstance | null>(null)
   const [nodes, setNodes] = useState<Node[]>(blocks.defaultNodes)
   const [edges, setEdges] = useState<Edge[]>(blocks.defaultEdges)
-  const [toolEdges, setToolEdges] = useState<Edge[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [specs, setSpecs] = useState<BlockSpec[] | null>(null)
   const [query, setQuery] = useState<string>("")
@@ -109,19 +108,17 @@ function IDE() {
         const specMap = specsToMap((specsResp.blocks as unknown as any[]) || [])
 
         if (wf && wf.graph) {
-          const { nodes: rawNodes, edges: rawEdges, toolEdges: rawToolEdges } = mapServerGraphToRF(wf.graph, specMap, (nodeId, nextParams) => {
+          const { nodes: rawNodes, edges: rawEdges } = mapServerGraphToRF(wf.graph, specMap, (nodeId, nextParams) => {
             setNodes((prev) => prev.map((pn) => pn.id === nodeId ? { ...pn, data: { ...pn.data, params: nextParams } } : pn))
           })
           const laid = layoutGraph(rawNodes.map((n) => ({ ...n, position: { x: n.position.x, y: n.position.y } })), rawEdges)
           setNodes(laid.nodes)
           setEdges(laid.edges)
-          setToolEdges(rawToolEdges)
           setGraphLoaded(true)
         } else {
           const laid = layoutGraph(blocks.defaultNodes as any, blocks.defaultEdges as any)
           setNodes(laid.nodes)
           setEdges(laid.edges)
-          setToolEdges([])
           setGraphLoaded(true)
         }
         setSpecs((specsResp.blocks as unknown as any[]) || [])
@@ -167,10 +164,12 @@ function IDE() {
         if (sourceOutput) upstreamData[edge.source] = sourceOutput
       })
       
-      // Compute connected agent ids for tool nodes
+      // Compute connected agent ids for tool nodes (via tool edges)
       const connectedAgents: string[] = []
       if ((n as any)?.type === 'tool') {
-        toolEdges.forEach((e) => {
+        edges.forEach((e) => {
+          const kind = (e as any)?.data?.kind || 'control'
+          if (kind !== 'tool') return
           if (e.source === n.id || e.target === n.id) {
             const other = e.source === n.id ? e.target : e.source
             const otherNode = prev.find((pn) => pn.id === other)
@@ -192,7 +191,7 @@ function IDE() {
         }
       }
     }))
-  }, [runData, activeNodeIds, edges, toolEdges])
+  }, [runData, activeNodeIds, edges])
 
   useEffect(() => {
     setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, active: activeNodeIds.has(n.id) } })))
@@ -228,24 +227,63 @@ function IDE() {
     }
     if (source && target) {
       const ok = (isAgent(src) && isTool(tgt)) || (isAgent(tgt) && isTool(src))
-      // Prevent duplicate edges between the same pair
-      const dup = toolEdges.some((e) => (e.source === source && e.target === target) || (e.source === target && e.target === source))
+      // Prevent duplicate tool edges between the same pair
+      const dup = edges.some((e) => {
+        const kind = (e as any)?.data?.kind || 'control'
+        return kind === 'tool' && ((e.source === source && e.target === target) || (e.source === target && e.target === source))
+      })
       return !!ok && !dup
     }
     return false
-  }, [nodes, toolEdges])
+  }, [nodes, edges])
   const onConnectTool = useCallback((conn: Connection) => {
     if (!onConnectValidate(conn)) return
-    const id = `tool-${conn.source}-${conn.target}-${Date.now()}`
-    setToolEdges((prev) => [...prev, { id, source: String(conn.source), target: String(conn.target), sourceHandle: conn.sourceHandle, targetHandle: conn.targetHandle, data: { toolEdge: true }, style: { stroke: '#000', strokeWidth: 2 } } as Edge])
-  }, [onConnectValidate])
+    // Normalize direction: agent (with tools handle) should be source; tool should be target
+    const srcNode = nodes.find(n => n.id === conn.source)
+    const tgtNode = nodes.find(n => n.id === conn.target)
+    const isAgent = (n?: Node | undefined) => {
+      if (!n) return false
+      const nodeType = (n as any)?.type
+      const typeName = String((n as any)?.data?.typeName || '')
+      const spec = (n as any)?.data?.schema
+      const hasToolsConnector = Array.isArray(spec?.extras?.connectors) && spec.extras.connectors.some((c: any) => c?.name === 'tools')
+      return nodeType === 'agent' || spec?.kind === 'agent' || typeName.startsWith('agent.') || hasToolsConnector
+    }
+    const isTool = (n?: Node | undefined) => {
+      if (!n) return false
+      const t = String((n as any)?.data?.typeName || '')
+      const spec = (n as any)?.data?.schema
+      const extrasTool = !!spec?.extras?.toolCompatible
+      return t.startsWith('tool.') || extrasTool || (n as any)?.type === 'tool'
+    }
+    let source = String(conn.source)
+    let target = String(conn.target)
+    let sourceHandle = conn.sourceHandle
+    let targetHandle = conn.targetHandle
+    if (!isAgent(srcNode) && isAgent(tgtNode)) {
+      // swap so agent is source
+      source = String(conn.target)
+      target = String(conn.source)
+      sourceHandle = conn.targetHandle
+      targetHandle = conn.sourceHandle
+    }
+    // Ensure the agent's tools connector is the source handle and the tool node's top handle is target
+    sourceHandle = 'tools'
+    const targetNode = nodes.find(n => n.id === target)
+    if (isTool(targetNode)) targetHandle = 'tool'
 
-  // Remove tool edges on delete
-  const onToolEdgesChange: OnEdgesChange = useCallback((changes) => {
-    const removals = changes.filter((c: any) => c.type === 'remove').map((c: any) => c.id)
-    if (removals.length === 0) return
-    setToolEdges((prev) => prev.filter((e) => !removals.includes(e.id)))
-  }, [])
+    const id = `tool-${source}-${target}-${Date.now()}`
+    setEdges((prev) => [...prev, {
+      id,
+      source,
+      target,
+      sourceHandle,
+      targetHandle,
+      data: { kind: 'tool' },
+      markerEnd: undefined,
+      style: { stroke: '#000', strokeWidth: 2 }
+    } as Edge])
+  }, [onConnectValidate, nodes])
 
   const onSelectionChange = useCallback((params: { nodes: Node[]; edges: Edge[] }) => {
     const sel = params?.nodes && params.nodes[0]
@@ -306,19 +344,14 @@ function IDE() {
     setActiveNodeIds(new Set()) // Clear highlights when streaming stops
   }, [])
 
-  // Persist latest graph immediately (used before Run) to ensure settings like JSON payload are saved as objects
+  // Immediate save helper (used before Run)
   const flushSave = useCallback(async () => {
     if (!workflowId || !Number.isFinite(Number(workflowId))) return
-    const agentTools = computeAgentTools(nodes, toolEdges)
-    const graph = mapRFToServerGraph(nodes, edges, agentTools)
+    const graph = mapRFToServerGraph(nodes, edges)
     const serialized = JSON.stringify(graph)
-    try {
-      await apiClient.updateWorkflow(Number(workflowId), { graph })
-      lastSavedGraphRef.current = serialized
-    } catch (e: any) {
-      throw e
-    }
-  }, [nodes, edges, toolEdges, workflowId])
+    await apiClient.updateWorkflow(Number(workflowId), { graph })
+    lastSavedGraphRef.current = serialized
+  }, [nodes, edges, workflowId])
 
   const startPolling = useCallback((runId: number) => {
     stopStreaming()
@@ -426,11 +459,10 @@ function IDE() {
     })
   }, [edges, specs])
 
-  // Debounced save when nodes/edges or params change
+  // Persist latest graph immediately (used before Run) to ensure settings like JSON payload are saved as objects
   useEffect(() => {
     if (!workflowId || !Number.isFinite(Number(workflowId))) return
-    const agentTools = computeAgentTools(nodes, toolEdges)
-    const graph = mapRFToServerGraph(nodes, edges, agentTools)
+    const graph = mapRFToServerGraph(nodes, edges)
     const serialized = JSON.stringify(graph)
     if (serialized === lastSavedGraphRef.current) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -445,7 +477,7 @@ function IDE() {
         setSavingState('error')
       }
     }, 600)
-  }, [nodes, edges, toolEdges, workflowId])
+  }, [nodes, edges, workflowId])
 
   const handleRun = useCallback(async () => {
     if (!workflowId || !Number.isFinite(Number(workflowId))) return
@@ -515,9 +547,9 @@ function IDE() {
               onInit={(inst) => { rfRef.current = inst; setTimeout(() => { fitViewReliable() }, 0) }}
               nodeTypes={nodeTypes}
               nodes={nodes}
-              edges={[...edges, ...toolEdges]}
+              edges={edges}
               onNodesChange={onNodesChange}
-              onEdgesChange={(changes) => { onEdgesChange(changes); onToolEdgesChange(changes as any) }}
+              onEdgesChange={onEdgesChange}
               onConnect={(c) => {
                 if (c.sourceHandle === 'tools' || c.targetHandle === 'tools') onConnectTool(c)
                 else onConnect(c)

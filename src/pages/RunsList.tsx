@@ -8,23 +8,33 @@ import { useModal } from '../context/ModalContext'
 function RunsList() {
   const { open } = useModal()
   const [loading, setLoading] = useState(false)
-  const [runsData, setRunsData] = useState<Array<Pick<RunResponse, 'id' | 'workflow_id' | 'status' | 'started_at' | 'finished_at'>> | null>(null)
+  const [items, setItems] = useState<Array<Pick<RunResponse, 'id' | 'workflow_id' | 'status' | 'started_at' | 'finished_at'>>>([])
+  const [nextCursor, setNextCursor] = useState<number | null>(null)
+  const [hasMore, setHasMore] = useState(false)
 
-  const fetchRuns = () => {
+  const loadPage = (cursor?: number | null) => {
     setLoading(true)
-    apiClient.listRuns()
-      .then((rows) => setRunsData(rows))
-      .catch((e) => open({ title: 'Failed to load runs', body: e?.message || 'Unknown error', primaryLabel: 'Retry', onPrimary: fetchRuns }))
+    apiClient.listRunsPage({ limit: 10, before_id: cursor ?? undefined })
+      .then((page) => {
+        setItems((prev) => [...prev, ...page.items])
+        setNextCursor(page.next_cursor ?? null)
+        setHasMore(!!page.has_more)
+      })
+      .catch((e) => open({ title: 'Failed to load runs', body: e?.message || 'Unknown error', primaryLabel: 'Retry', onPrimary: () => loadPage(cursor) }))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
-    fetchRuns()
+    setItems([])
+    setNextCursor(null)
+    setHasMore(false)
+    loadPage()
   }, [])
 
   const rows = useMemo(() => {
-    if (runsData && runsData.length > 0) {
-      return [...runsData].sort((a, b) => (Date.parse(b.started_at || '0') - Date.parse(a.started_at || '0')))
+    if (items.length > 0) {
+      return [...items]
+        .sort((a, b) => (Date.parse(b.started_at || '0') - Date.parse(a.started_at || '0')))
         .slice(0, 5)
         .map((r) => ({
           id: String(r.id),
@@ -34,7 +44,7 @@ function RunsList() {
         }))
     }
     return []
-  }, [runsData])
+  }, [items])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [apiLogs, setApiLogs] = useState<LogEntry[] | null>(null)
@@ -59,7 +69,7 @@ function RunsList() {
     setSelectedId(rows[0].id)
   }, [rows])
 
-  const showEmpty = !loading && rows.length === 0
+  const showEmpty = !loading && items.length === 0
 
   return (
     <main className="neo-container">
@@ -94,6 +104,11 @@ function RunsList() {
                 ))}
               </tbody>
             </table>
+            {hasMore && (
+              <div style={{display:'flex', justifyContent:'center', padding:'12px 0'}}>
+                <button className="neo-button" onClick={() => loadPage(nextCursor || undefined)}>Load more</button>
+              </div>
+            )}
           </div>
         )}
 

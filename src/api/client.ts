@@ -29,6 +29,17 @@ export class ApiClient {
     return data
   }
 
+  async listRunsPage(params: { workflow_id?: number; status?: string; limit: number; before_id?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params.workflow_id != null) searchParams.set('workflow_id', String(params.workflow_id))
+    if (params.status != null) searchParams.set('status', String(params.status))
+    if (params.limit != null) searchParams.set('limit', String(params.limit))
+    if (params.before_id != null) searchParams.set('before_id', String(params.before_id))
+    const qs = searchParams.toString()
+    const { data } = await this.http.get<import('./types').RunsPage>(`/runs${qs ? `?${qs}` : ''}`)
+    return data
+  }
+
   async createWorkflow(body: WorkflowCreate) {
     const { data } = await this.http.post<{ id: number }>('/workflows', body)
     return data
@@ -76,6 +87,22 @@ export class ApiClient {
 
   async getBlockSpecs() {
     const { data } = await this.http.get<{ blocks: Record<string, unknown> }>(`/block-specs`)
+    return data
+  }
+
+  // Integrations
+  async listIntegrations() {
+    const { data } = await this.http.get<import('./types').IntegrationsResponse>(`/integrations`)
+    return data
+  }
+
+  async listComposioAccounts(toolkit?: string) {
+    const { data } = await this.http.get<import('./types').ComposioAccount[]>(`/integrations/composio/accounts${toolkit ? `?toolkit=${encodeURIComponent(toolkit)}` : ''}`)
+    return data
+  }
+
+  async authorizeComposio(toolkit: string) {
+    const { data } = await this.http.post<{ redirect_url: string; connection_request_id?: string }>(`/integrations/composio/authorize`, { toolkit })
     return data
   }
 }

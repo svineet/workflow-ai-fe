@@ -1,6 +1,6 @@
 // Shared API models
 export type GraphNode = { id: string; type: string; params?: Record<string, unknown> }
-export type GraphEdge = { id: string; from: string; to: string }
+export type GraphEdge = { id: string; from: string; to: string; kind?: 'control' | 'tool' }
 export type Graph = { nodes: GraphNode[]; edges: GraphEdge[] }
 
 // Workflows
@@ -36,4 +36,31 @@ export type LogEntry = {
   level: string
   message: string
   data?: Record<string, unknown> | null
+}
+
+// Pagination
+export type RunsPage = {
+  items: Array<Pick<RunResponse, 'id' | 'workflow_id' | 'status' | 'started_at' | 'finished_at' | 'trigger_type'>>
+  next_cursor?: number | null
+  has_more: boolean
+}
+
+// Integrations
+export type ComposioAccount = {
+  id: number
+  toolkit: string
+  connected_account_id: string
+  status: string
+  created_at: string
+}
+
+export type IntegrationItem = {
+  provider: 'composio'
+  toolkit: string
+  connected: boolean
+  accounts: Array<Omit<ComposioAccount, 'toolkit'>>
+}
+
+export type IntegrationsResponse = {
+  integrations: IntegrationItem[]
 } 
