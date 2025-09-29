@@ -8,34 +8,56 @@ import { useModal } from '../context/ModalContext'
 function RunsList() {
   const { open } = useModal()
   const [loading, setLoading] = useState(false)
-  const [items, setItems] = useState<Array<Pick<RunResponse, 'id' | 'workflow_id' | 'status' | 'started_at' | 'finished_at'>>>([])
-  const [nextCursor, setNextCursor] = useState<number | null>(null)
+  type RunPick = Pick<RunResponse, 'id' | 'workflow_id' | 'status' | 'started_at' | 'finished_at'>
+  type Page = { items: RunPick[]; nextCursor: number | null }
+  const [pages, setPages] = useState<Page[]>([])
+  const [currentPage, setCurrentPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
 
-  const loadPage = (cursor?: number | null) => {
+  const fetchPage = (before_id?: number) => {
+    return apiClient.listRunsPage({ limit: 5, before_id })
+  }
+
+  const ensurePage = async (index: number): Promise<boolean> => {
+    if (index < pages.length) { setCurrentPage(index); return true }
+    if (index !== pages.length) return false
+    const prev = pages[index - 1]
+    let cursor = index === 0 ? undefined : (prev?.nextCursor ?? undefined)
+    if (index > 0 && cursor == null && prev && prev.items && prev.items.length > 0) {
+      cursor = Math.min(...prev.items.map((it) => Number(it.id)))
+    }
+    if (index > 0 && cursor == null) return false
     setLoading(true)
-    apiClient.listRunsPage({ limit: 10, before_id: cursor ?? undefined })
-      .then((page) => {
-        setItems((prev) => [...prev, ...page.items])
-        setNextCursor(page.next_cursor ?? null)
-        setHasMore(!!page.has_more)
+    try {
+      const page = await fetchPage(cursor)
+      setPages((prevPages) => {
+        const next = [...prevPages, { items: page.items, nextCursor: page.next_cursor ?? null }]
+        return next
       })
-      .catch((e) => open({ title: 'Failed to load runs', body: e?.message || 'Unknown error', primaryLabel: 'Retry', onPrimary: () => loadPage(cursor) }))
-      .finally(() => setLoading(false))
+      setHasMore(!!page.has_more)
+      // Defer setting current page until after pages state queues
+      setTimeout(() => setCurrentPage(index), 0)
+      return true
+    } catch (e: any) {
+      open({ title: 'Failed to load runs', body: e?.message || 'Unknown error', primaryLabel: 'Retry', onPrimary: () => ensurePage(index) })
+      return false
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
-    setItems([])
-    setNextCursor(null)
+    setPages([])
+    setCurrentPage(0)
     setHasMore(false)
-    loadPage()
+    ensurePage(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const rows = useMemo(() => {
-    if (items.length > 0) {
-      return [...items]
-        .sort((a, b) => (Date.parse(b.started_at || '0') - Date.parse(a.started_at || '0')))
-        .slice(0, 5)
+    const pg = pages[currentPage]
+    if (pg && pg.items.length > 0) {
+      return pg.items
         .map((r) => ({
           id: String(r.id),
           status: r.status,
@@ -44,7 +66,7 @@ function RunsList() {
         }))
     }
     return []
-  }, [items])
+  }, [pages, currentPage])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [apiLogs, setApiLogs] = useState<LogEntry[] | null>(null)
@@ -60,6 +82,7 @@ function RunsList() {
     const numericId = Number(String(selectedId).replace(/[^0-9]/g, ''))
     if (!Number.isFinite(numericId)) { setApiLogs(null); return }
     fetchLogs(numericId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
 
   const logs = apiLogs ? apiLogs.map((l) => `${l.ts} [${l.level}] ${l.message}`) : (selectedId ? getLogsForRun(selectedId) : [])
@@ -69,13 +92,36 @@ function RunsList() {
     setSelectedId(rows[0].id)
   }, [rows])
 
-  const showEmpty = !loading && items.length === 0
+  const showEmpty = !loading && pages.length > 0 && pages[0].items.length === 0
+
+  const goPrev = () => {
+    if (loading) return
+    if (currentPage > 0) setCurrentPage((p) => p - 1)
+  }
+  const goNext = async () => {
+    if (loading) return
+    const nextIndex = currentPage + 1
+    if (nextIndex < pages.length) {
+      setCurrentPage(nextIndex)
+      return
+    }
+    if (hasMore) {
+      await ensurePage(nextIndex)
+    }
+  }
+  const goPage = async (idx: number) => {
+    if (loading) return
+    if (idx < pages.length) { setCurrentPage(idx); return }
+    if (idx === pages.length && hasMore) {
+      await ensurePage(idx)
+    }
+  }
 
   return (
     <main className="neo-container">
       <div className="main-wrap">
         <h2>Runs</h2>
-        {loading && <div className="neo-card" style={{marginBottom:12}}>Loading…</div>}
+        {loading && pages.length === 0 && <div className="neo-card" style={{marginBottom:12}}>Loading…</div>}
 
         {!showEmpty && (
           <div className="table-wrap neo-card">
@@ -97,18 +143,30 @@ function RunsList() {
                     <td>{r.startedAt ? new Date(r.startedAt).toLocaleString() : '—'}</td>
                     <td>{r.durationSeconds}s</td>
                     <td style={{display:'flex',gap:8}}>
-                      <button className="neo-button" onClick={() => setSelectedId(r.id)}>Logs</button>
+                      <button className="neo-button" onClick={() => setSelectedId(r.id)} disabled={loading}>Logs</button>
                       <NavLink to={`/runs/${r.id}`} className="neo-button">Open</NavLink>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {hasMore && (
-              <div style={{display:'flex', justifyContent:'center', padding:'12px 0'}}>
-                <button className="neo-button" onClick={() => loadPage(nextCursor || undefined)}>Load more</button>
-              </div>
-            )}
+            {/* Pagination controls */}
+            <div style={{display:'flex', gap:8, justifyContent:'center', alignItems:'center', padding:'12px 0'}}>
+              <button className="neo-button" onClick={goPrev} disabled={currentPage === 0 || loading}>Prev</button>
+              {pages.map((_, idx) => (
+                <button
+                  key={idx}
+                  className="neo-button"
+                  style={idx === currentPage ? { background: 'var(--accent)', color: '#000' } : undefined}
+                  onClick={() => goPage(idx)}
+                  disabled={loading}
+                >{idx + 1}</button>
+              ))}
+              {hasMore && (
+                <button className="neo-button" onClick={goNext} disabled={loading}>Next</button>
+              )}
+              {loading && pages.length > 0 && <span className="muted" style={{marginLeft:8}}>Loading…</span>}
+            </div>
           </div>
         )}
 

@@ -20,6 +20,19 @@ function isJsonLike(schema: any, value: any, key?: string): boolean {
   return false
 }
 
+function isMultiline(schema: any): boolean {
+  const fmt = (schema?.format || '').toLowerCase()
+  const widget = (schema?.['ui_widget'] || schema?.['x-ui-widget'] || '').toLowerCase()
+  const uiMultiline = !!(schema?.['ui_multiline'] || schema?.['x-ui-multiline'])
+  const media = (schema?.contentMediaType || '').toLowerCase()
+  const maxLen = typeof schema?.maxLength === 'number' ? schema.maxLength : undefined
+  return uiMultiline || widget === 'textarea' || fmt === 'multiline' || fmt === 'textarea' || media === 'text/markdown' || (typeof maxLen === 'number' && maxLen > 200)
+}
+
+function isUIRequired(propSchema: any, key: string, requiredList: string[]): boolean {
+  return requiredList.includes(key) || !!(propSchema?.['ui_required'] || propSchema?.['uiRequired'] || propSchema?.['x-ui-required'])
+}
+
 function normalizeJsonInput(rawText: string): any {
   if (typeof rawText !== 'string') return rawText
   let s = rawText.trim()
@@ -104,7 +117,8 @@ function renderField(key: string, schema: any, value: any, onChange: (v: any) =>
     }} />
   }
   if (tset.has('string')) {
-    return <textarea className="neo-input" rows={3} value={value ?? ''} onChange={(e) => {
+    if (isMultiline(schema)) {
+      return <textarea className="neo-input" rows={3} value={value ?? ''} onChange={(e) => {
       const next = e.target.value
       if (looksJsonish(next)) {
         const normalized = normalizeJsonInput(next)
@@ -114,6 +128,8 @@ function renderField(key: string, schema: any, value: any, onChange: (v: any) =>
         onChange(next)
       }
     }} />
+    }
+    return <input className="neo-input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
   }
   return <input className="neo-input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
 }
@@ -132,7 +148,7 @@ const ConfigNode = memo((props: NodeProps) => {
 
   const { requiredKeys, optionalKeys } = useMemo(() => {
     const keys = Object.keys(properties)
-    keys.sort((a, b) => (required.includes(a) === required.includes(b)) ? a.localeCompare(b) : (required.includes(a) ? -1 : 1))
+    keys.sort((a, b) => (isUIRequired(properties[a], a, required) === isUIRequired(properties[b], b, required)) ? a.localeCompare(b) : (isUIRequired(properties[a], a, required) ? -1 : 1))
     return {
       requiredKeys: keys.filter((k) => required.includes(k)),
       optionalKeys: keys.filter((k) => !required.includes(k)),
