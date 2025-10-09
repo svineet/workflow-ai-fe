@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import ReactFlow, { addEdge, Background, BackgroundVariant, Controls, Connection, Edge, Node, OnEdgesChange, OnNodesChange, applyNodeChanges, applyEdgeChanges, MarkerType } from 'reactflow'
 import type { ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
+import Note, { type NoteData } from '../components/Note'
 import * as blocks from '../mocks/blocks.ts'
 import { getMockLogsForIDE } from '../mocks/logs.ts'
 import { useParams } from 'react-router-dom'
@@ -67,6 +68,7 @@ function IDE() {
   const [schemaOpen, setSchemaOpen] = useState<boolean>(false)
   const [runtimeOpen, setRuntimeOpen] = useState<boolean>(false)
   const [graphLoaded, setGraphLoaded] = useState<boolean>(false)
+  const [notes, setNotes] = useState<NoteData[]>([])
   const consoleRef = useRef<HTMLDivElement | null>(null)
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true)
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -284,6 +286,18 @@ function IDE() {
       style: { stroke: '#000', strokeWidth: 2 }
     } as Edge])
   }, [onConnectValidate, nodes])
+
+  const handleAddNote = useCallback(() => {
+    setNotes((prev) => {
+      const id = `note-${Date.now()}`
+      const next: NoteData = { id, x: 120 + (prev.length * 20), y: 120 + (prev.length * 20), text: '' }
+      return [...prev, next]
+    })
+  }, [])
+
+  const handleChangeNote = useCallback((next: NoteData) => {
+    setNotes((prev) => prev.map((n) => n.id === next.id ? next : n))
+  }, [])
 
   const onSelectionChange = useCallback((params: { nodes: Node[]; edges: Edge[] }) => {
     const sel = params?.nodes && params.nodes[0]
@@ -530,6 +544,9 @@ function IDE() {
                   onChange={(e) => setQuery(e.target.value)}
                   aria-label="Search blocks"
                 />
+                <div className="card-actions" style={{margin: '8px 0'}}>
+                  <button className="neo-button" onClick={handleAddNote}>Add Note</button>
+                </div>
                 <div className="block-list">
                   {filteredItems.map((b: { type: string; label: string; summary?: string }) => (
                     <button key={b.type} className="neo-button block-item" onClick={() => handleAddBlock(b.type)}>
@@ -568,6 +585,9 @@ function IDE() {
               <Controls position="bottom-right" />
               <Background variant={BackgroundVariant.Lines} gap={24} size={1} />
             </ReactFlow>
+            {notes.map((n) => (
+              <Note key={n.id} note={n} onChange={handleChangeNote} />
+            ))}
           </div>
         </section>
 

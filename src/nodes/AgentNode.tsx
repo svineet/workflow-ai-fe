@@ -24,7 +24,7 @@ function isMultiline(schema: any, key?: string): boolean {
   const uiMultiline = !!(schema?.['ui_multiline'] || schema?.['x-ui-multiline'])
   const media = (schema?.contentMediaType || '').toLowerCase()
   const maxLen = typeof schema?.maxLength === 'number' ? schema.maxLength : undefined
-  if (key === 'system') return true
+  if (key === 'system' || key === 'prompt') return true
   return uiMultiline || widget === 'textarea' || fmt === 'multiline' || fmt === 'textarea' || media === 'text/markdown' || (typeof maxLen === 'number' && maxLen > 200)
 }
 
@@ -33,6 +33,9 @@ function isUIRequired(propSchema: any, key: string, requiredList: string[]): boo
 }
 
 function renderField(key: string, schema: any, value: any, onChange: (v: any) => void) {
+  if (key === 'system' || key === 'prompt') {
+    return <textarea className="neo-input" rows={4} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+  }
   const tset = toTypeSet(schema?.type)
   const enumVals = schema?.enum as string[] | undefined
   if (enumVals && enumVals.length) {

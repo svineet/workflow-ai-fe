@@ -378,3 +378,42 @@ h1, h2, h3, h4 { margin-top: 0; }
 .ide-sidebar::-webkit-scrollbar-thumb:hover {
   background: #333;
 }
+
+.note-sticky {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #fff;
+  user-select: text;
+  max-width: 280px;
+  z-index: 18;
+}
+.note-sticky .note-title {
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  padding: 6px 10px;
+  cursor: grab;
+  background: #ffd34f; /* same as body */
+  box-shadow: 4px 4px 0 #000;
+}
+.note-sticky .note-body {
+  border: 0;
+  outline: none;
+  padding: 10px 12px;
+  background: #ffd34f; /* post-it like */
+  color: #fff;
+  box-shadow: 4px 4px 0 #000;
+  min-width: 160px;
+  min-height: 80px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+}
+/* Keep interactions straightforward */
+.note-sticky, .note-sticky * { pointer-events: auto; }
