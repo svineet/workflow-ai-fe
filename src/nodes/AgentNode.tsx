@@ -103,7 +103,7 @@ const AgentNode = memo((props: NodeProps) => {
   }, [properties, required])
 
   return (
-    <div className={`config-node${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
+    <div className={`config-node nowheel${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
       {/* Control flow handles */}
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
@@ -145,9 +145,8 @@ const AgentNode = memo((props: NodeProps) => {
 
       {/* Tools connector label */}
       <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, textAlign: 'center' }}>Tools</div>
-      {/* Tools connector handles (bidirectional in UI) */}
+      {/* Tools connector handle */}
       <Handle id="tools" type="source" position={Position.Bottom} style={{ left: '50%', transform: 'translateX(-50%)', background: '#3b82f6' }} />
-      <Handle id="tools" type="target" position={Position.Bottom} style={{ left: '50%', transform: 'translateX(-50%)', background: '#3b82f6' }} />
     </div>
   )
 })

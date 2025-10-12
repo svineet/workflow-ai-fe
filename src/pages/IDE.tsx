@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
-import ReactFlow, { addEdge, Background, BackgroundVariant, Controls, Connection, Edge, Node, OnEdgesChange, OnNodesChange, applyNodeChanges, applyEdgeChanges, MarkerType } from 'reactflow'
+import ReactFlow, { addEdge, Background, BackgroundVariant, Controls, Connection, Edge, Node, OnEdgesChange, OnNodesChange, applyNodeChanges, applyEdgeChanges, MarkerType, ConnectionMode } from 'reactflow'
 import type { ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
 import Note, { type NoteData } from '../components/Note'
@@ -25,6 +25,7 @@ function typeToIcon(t: string): string {
   if (t.startsWith('transform')) return '✎'
   if (t.startsWith('math')) return '∑'
   if (t.startsWith('control')) return '◎'
+  if (t.startsWith('tool')) return '⚒'
   if (t === 'start') return '◎'
   return '■'
 }
@@ -113,9 +114,9 @@ function IDE() {
           const { nodes: rawNodes, edges: rawEdges } = mapServerGraphToRF(wf.graph, specMap, (nodeId, nextParams) => {
             setNodes((prev) => prev.map((pn) => pn.id === nodeId ? { ...pn, data: { ...pn.data, params: nextParams } } : pn))
           })
-          const laid = layoutGraph(rawNodes.map((n) => ({ ...n, position: { x: n.position.x, y: n.position.y } })), rawEdges)
-          setNodes(laid.nodes)
-          setEdges(laid.edges)
+          // Use server-provided positions as-is; do not run Dagre on load
+          setNodes(rawNodes)
+          setEdges(rawEdges)
           setGraphLoaded(true)
         } else {
           const laid = layoutGraph(blocks.defaultNodes as any, blocks.defaultEdges as any)
@@ -204,20 +205,16 @@ function IDE() {
   const onConnect = useCallback((connection: Connection) => setEdges((eds) => addEdge(connection, eds)), [])
   
   // Tool connection validation and add
-  const onConnectStart = undefined
-  const onConnectEnd = undefined
   const onConnectValidate = useCallback((conn: Connection) => {
     const { source, target, sourceHandle, targetHandle } = conn
     const src = nodes.find((n) => n.id === source)
     const tgt = nodes.find((n) => n.id === target)
-    const isAgentHandle = sourceHandle === 'tools' || targetHandle === 'tools'
-    if (!isAgentHandle) return true // normal control edge
     const isTool = (n?: Node) => {
       if (!n) return false
       const t = String((n as any)?.data?.typeName || '')
       const spec = (n as any)?.data?.schema
       const extrasTool = !!spec?.extras?.toolCompatible
-      return t.startsWith('tool.') || extrasTool
+      return t.startsWith('tool.') || extrasTool || (n as any)?.type === 'tool'
     }
     const isAgent = (n?: Node) => {
       if (!n) return false
@@ -227,16 +224,20 @@ function IDE() {
       const hasToolsConnector = Array.isArray(spec?.extras?.connectors) && spec.extras.connectors.some((c: any) => c?.name === 'tools')
       return nodeType === 'agent' || spec?.kind === 'agent' || typeName.startsWith('agent.') || hasToolsConnector
     }
-    if (source && target) {
-      const ok = (isAgent(src) && isTool(tgt)) || (isAgent(tgt) && isTool(src))
-      // Prevent duplicate tool edges between the same pair
+    if (!source || !target) return false
+
+    // If starting from agent.tools, allow dropping anywhere on a tool node; we'll normalize the handle ids later
+    if (sourceHandle === 'tools') {
+      if (!isAgent(src) || !isTool(tgt)) return false
       const dup = edges.some((e) => {
         const kind = (e as any)?.data?.kind || 'control'
         return kind === 'tool' && ((e.source === source && e.target === target) || (e.source === target && e.target === source))
       })
-      return !!ok && !dup
+      return !dup
     }
-    return false
+
+    // Otherwise, allow normal control edges
+    return true
   }, [nodes, edges])
   const onConnectTool = useCallback((conn: Connection) => {
     if (!onConnectValidate(conn)) return
@@ -457,11 +458,14 @@ function IDE() {
       const schema = extractSchema(spec)
       const defaults = extractDefaults(schema)
       const hasConfig = !!schema
+      const hasToolsConnector = Array.isArray(spec?.extras?.connectors) && spec.extras.connectors.some((c: any) => c?.name === 'tools')
+      const isAgent = spec?.kind === 'agent' || String(blockType || '').startsWith('agent.') || hasToolsConnector
+      const isTool = String(blockType || '').startsWith('tool.') || !!spec?.extras?.toolCompatible
       const existing = new Set(prev.map((n) => n.id))
       const id = makeSimpleId(existing, blockType)
       const newNode: Node = {
         id,
-        type: hasConfig ? 'config' : undefined,
+        type: isAgent ? 'agent' : (isTool ? 'tool' : (hasConfig ? 'config' : undefined)),
         data: { label: blockType, params: { ...defaults }, schema: spec, typeName: blockType, onChangeParams: (nodeId: string, nextParams: any) => {
           setNodes((pp) => pp.map((pn) => pn.id === nodeId ? { ...pn, data: { ...pn.data, params: nextParams } } : pn))
         } },
@@ -567,14 +571,18 @@ function IDE() {
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
+              connectionMode={ConnectionMode.Loose}
               onConnect={(c) => {
-                if (c.sourceHandle === 'tools' || c.targetHandle === 'tools') onConnectTool(c)
-                else onConnect(c)
+                const tgt = nodes.find((n) => n.id === c.target)
+                const isTool = (n?: Node) => !!n && (String((n as any)?.data?.typeName || '').startsWith('tool.') || !!(n as any)?.data?.schema?.extras?.toolCompatible || (n as any)?.type === 'tool')
+                // Route agent.tools -> tool node connections through onConnectTool regardless of missing targetHandle
+                if (c.sourceHandle === 'tools' && isTool(tgt)) {
+                  onConnectTool({ ...c, targetHandle: 'tool' })
+                } else {
+                  onConnect(c)
+                }
               }}
-              isValidConnection={(c) => {
-                if (c.sourceHandle === 'tools' || c.targetHandle === 'tools') return onConnectValidate(c)
-                return true
-              }}
+              isValidConnection={(c) => onConnectValidate(c)}
               onSelectionChange={onSelectionChange}
               fitView
               fitViewOptions={{ padding: 0.12, includeHiddenNodes: true }}

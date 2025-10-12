@@ -1,5 +1,5 @@
 // Shared API models
-export type GraphNode = { id: string; type: string; params?: Record<string, unknown> }
+export type GraphNode = { id: string; type: string; params?: Record<string, unknown>; position?: { x: number; y: number } }
 export type GraphEdge = { id: string; from: string; to: string; kind?: 'control' | 'tool' }
 export type Graph = { nodes: GraphNode[]; edges: GraphEdge[] }
 

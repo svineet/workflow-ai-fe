@@ -46,11 +46,14 @@ export function mapServerGraphToRF(
     const isAgent = spec?.kind === 'agent' || String(n.type || '').startsWith('agent.') || hasToolsConnector
     const isTool = String(n.type || '').startsWith('tool.') || !!(spec as any)?.extras?.toolCompatible
     const hasConfig = !!schema
+    const pos = (n as any)?.position
     const node: Node = {
       id: n.id,
       type: isAgent ? 'agent' : (isTool ? 'tool' : (hasConfig ? 'config' : undefined)),
       data: { label: n.type, params: mergedSettings, schema: spec, typeName: n.type, onChangeParams },
-      position: { x: (idx % 4) * 300, y: Math.floor(idx / 4) * 180 },
+      position: (pos && typeof pos.x === 'number' && typeof pos.y === 'number')
+        ? { x: pos.x, y: pos.y }
+        : { x: (idx % 4) * 300, y: Math.floor(idx / 4) * 180 },
     }
     return node
   })
@@ -117,7 +120,10 @@ export function mapRFToServerGraph(nodes: Node[], edges: Edge[]): any {
     const id = n.id
     const finalSettings: Record<string, any> = {}
     Object.keys(settings).forEach((k) => { finalSettings[k] = coerceJsonish((settings as any)[k]) })
-    return { id, type: String(typeName), settings: finalSettings }
+    const position = (n as any)?.position && typeof (n as any).position.x === 'number' && typeof (n as any).position.y === 'number'
+      ? { x: (n as any).position.x, y: (n as any).position.y }
+      : undefined
+    return { id, type: String(typeName), settings: finalSettings, ...(position ? { position } : {}) }
   })
 
   const sEdges = edges.map((e, idx) => ({

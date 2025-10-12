@@ -105,6 +105,12 @@ export class ApiClient {
     const { data } = await this.http.post<{ redirect_url: string; connection_request_id?: string }>(`/integrations/composio/authorize`, { toolkit })
     return data
   }
+
+  // Assistant seeding
+  async assistantNew(prompt: string, model?: string) {
+    const { data } = await this.http.post<{ id: number; cached?: boolean }>(`/assistant/new`, { prompt, model })
+    return data
+  }
 }
 
 export const apiClient = new ApiClient() 

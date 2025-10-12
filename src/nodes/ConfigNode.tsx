@@ -212,7 +212,7 @@ const ConfigNode = memo((props: NodeProps) => {
   }
 
   return (
-    <div className={`config-node${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
+    <div className={`config-node nowheel${isActive ? ' active' : ''}`} style={{ padding: 8, background: '#fff', border: `3px solid ${isActive ? 'var(--accent)' : '#000'}` }}>
       <Handle type="target" position={Position.Left} />
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 6 }}>
         <div style={{ fontWeight: 800 }}>{data?.label || data?.typeName}</div>
