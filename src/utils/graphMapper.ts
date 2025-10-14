@@ -63,6 +63,7 @@ export function mapServerGraphToRF(
     const isTool = kind === 'tool'
     const edge: Edge = {
       id: e.id || `${e.from}-${e.to}-${idx}`,
+      type: 'smoothstep',
       source: e.from,
       target: e.to,
       data: { kind },

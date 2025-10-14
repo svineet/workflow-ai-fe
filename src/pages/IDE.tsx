@@ -278,6 +278,7 @@ function IDE() {
     const id = `tool-${source}-${target}-${Date.now()}`
     setEdges((prev) => [...prev, {
       id,
+      type: 'smoothstep',
       source,
       target,
       sourceHandle,
@@ -588,7 +589,7 @@ function IDE() {
               fitViewOptions={{ padding: 0.12, includeHiddenNodes: true }}
               minZoom={0.2}
               defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
-              defaultEdgeOptions={{ animated: false, style: { stroke: '#000', strokeWidth: 2 }, markerEnd: { type: MarkerType.ArrowClosed as any, color: '#000' } }}
+              defaultEdgeOptions={{ type: 'smoothstep', animated: false, style: { stroke: '#000', strokeWidth: 2 }, markerEnd: { type: MarkerType.ArrowClosed as any, color: '#000' } }}
             >
               <Controls position="bottom-right" />
               <Background variant={BackgroundVariant.Lines} gap={24} size={1} />
