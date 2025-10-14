@@ -472,3 +472,24 @@ h1, h2, h3, h4 { margin-top: 0; }
 .nowheel .show-node-output {
   overscroll-behavior: contain;
 }
+
+.builder-stream {
+  margin-top: 10px;
+  border: 3px solid #000;
+  background: #fff;
+  box-shadow: 6px 6px 0 #000;
+}
+.builder-stream-title {
+  font-weight: 900;
+  padding: 8px 10px;
+  border-bottom: 3px solid #000;
+}
+.builder-stream-lines {
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.builder-stream-line { padding: 2px 0; white-space: pre-wrap; word-break: break-word; }
