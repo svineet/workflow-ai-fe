@@ -9,8 +9,7 @@ import { getUser, logout } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 
 function TopNav() {
-  const env: any = (import.meta as any)?.env || {}
-  const isDev = env.MODE !== 'production'
+  const isDev = import.meta.env.MODE !== 'production'
   const { open } = useModal()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
