@@ -24,7 +24,7 @@ export class ApiClient {
   }
 
   async listWorkflows() {
-    const { data } = await this.http.get<Array<Pick<WorkflowResponse, 'id' | 'name' | 'webhook_slug' | 'created_at'>>>('/workflows')
+    const { data } = await this.http.get<Array<Pick<WorkflowResponse, 'id' | 'name' | 'description' | 'webhook_slug' | 'created_at'>>>('/workflows')
     return data
   }
 

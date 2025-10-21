@@ -15,7 +15,7 @@ function WorkflowsList() {
   const { open } = useModal()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [workflows, setWorkflows] = useState<Array<Pick<WorkflowResponse, 'id' | 'name' | 'webhook_slug' | 'created_at'>> | null>(null)
+  const [workflows, setWorkflows] = useState<Array<Pick<WorkflowResponse, 'id' | 'name' | 'description' | 'webhook_slug' | 'created_at'>> | null>(null)
   const [query, setQuery] = useState('')
 
   const loadList = useCallback(() => {
@@ -99,7 +99,7 @@ function WorkflowsList() {
 
   const cards = useMemo(() => {
     const list = workflows && workflows.length > 0
-      ? workflows.map((wf) => ({ id: Number(wf.id), name: wf.name, slug: wf.webhook_slug || '', desc: '', updatedAt: Date.parse(wf.created_at) }))
+      ? workflows.map((wf) => ({ id: Number(wf.id), name: wf.name, slug: wf.webhook_slug || '', desc: (wf.description as any as string) || '', updatedAt: Date.parse(wf.created_at) }))
       : mockWorkflows.map((w) => ({ id: w.id as any, name: w.name, slug: '', desc: '', updatedAt: w.updatedAt }))
     const q = query.trim().toLowerCase()
     if (!q) return list
@@ -122,7 +122,8 @@ function WorkflowsList() {
           {cards.map((w) => (
             <div key={w.id} className="neo-card">
               <div className="card-title link"><NavLink to={`/ide/${w.id}`}>{w.name}</NavLink></div>
-              <div className="muted desc-min">Updated {new Date(w.updatedAt).toLocaleString()}</div>
+              {w.desc && <div className="muted" style={{whiteSpace:'pre-wrap'}}>{w.desc}</div>}
+              <div className="muted desc-min" style={{marginTop: 4}}>Updated {new Date(w.updatedAt).toLocaleString()}</div>
               <div className="card-actions">
                 <NavLink to={`/ide/${w.id}`} className="neo-button success" style={{flex:1, display:'flex', alignItems:'center', gap:8}}><FaWrench /> Edit in IDE</NavLink>
                 {typeof w.id === 'number' && (
