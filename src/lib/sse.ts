@@ -18,7 +18,7 @@ export async function openRunStream(
   })
 
   es.onmessage = onMessage
-  es.onerror = (e) => {
+  es.onerror = (e: Event) => {
     console.error('SSE error', e)
     if (onError) onError(e)
     es.close()
