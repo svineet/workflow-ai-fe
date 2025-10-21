@@ -120,11 +120,14 @@ function WorkflowsList() {
         {error && <div className="neo-card" style={{color:'#b00020', marginBottom:12}}>Error: {error}</div>}
         <div className="grid">
           {cards.map((w) => (
-            <div key={w.id} className="neo-card">
-              <div className="card-title link"><NavLink to={`/ide/${w.id}`}>{w.name}</NavLink></div>
-              {w.desc && <div className="muted" style={{whiteSpace:'pre-wrap'}}>{w.desc}</div>}
-              <div className="muted desc-min" style={{marginTop: 4}}>Updated {new Date(w.updatedAt).toLocaleString()}</div>
-              <div className="card-actions">
+            <div key={w.id} className="neo-card" style={{ display:'flex', flexDirection:'column', justifyContent:'space-between', minHeight: 180 }}>
+              <div>
+                <div className="card-title link"><NavLink to={`/ide/${w.id}`}>{w.name}</NavLink></div>
+                <div style={{ borderTop: '3px solid #000', margin: '6px 0' }} />
+                {w.desc && <div style={{ whiteSpace:'pre-wrap' }}>{w.desc}</div>}
+                <div className="muted desc-min" style={{ marginTop: 6 }}>Updated {new Date(w.updatedAt).toLocaleString()}</div>
+              </div>
+              <div className="card-actions" style={{ marginTop: 8 }}>
                 <NavLink to={`/ide/${w.id}`} className="neo-button success" style={{flex:1, display:'flex', alignItems:'center', gap:8}}><FaWrench /> Edit in IDE</NavLink>
                 {typeof w.id === 'number' && (
                   <button className="neo-button danger" style={{width:44, display:'grid', placeItems:'center'}} onClick={() => confirmDelete(w.id as number, w.name)}><FaTrash /></button>

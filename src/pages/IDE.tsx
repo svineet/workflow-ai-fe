@@ -70,6 +70,7 @@ function IDE() {
   const [runtimeOpen, setRuntimeOpen] = useState<boolean>(false)
   const [graphLoaded, setGraphLoaded] = useState<boolean>(false)
   const [notes, setNotes] = useState<NoteData[]>([])
+  const [workflowName, setWorkflowName] = useState<string>("")
   const consoleRef = useRef<HTMLDivElement | null>(null)
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true)
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -111,6 +112,7 @@ function IDE() {
         const specMap = specsToMap((specsResp.blocks as unknown as any[]) || [])
 
         if (wf && wf.graph) {
+          setWorkflowName(wf.name || '')
           const { nodes: rawNodes, edges: rawEdges } = mapServerGraphToRF(wf.graph, specMap, (nodeId, nextParams) => {
             setNodes((prev) => prev.map((pn) => pn.id === nodeId ? { ...pn, data: { ...pn.data, params: nextParams } } : pn))
           })
@@ -540,6 +542,11 @@ function IDE() {
                 {inspectorPanelOpen ? <FaChevronRight size={16} /> : <FaChevronLeft size={16} />}
               </button>
             </div>
+            {workflowName ? (
+              <div style={{ position:'absolute', top: 8, left:'50%', transform:'translateX(-50%)', pointerEvents:'none', fontSize: 12, fontWeight: 700, color:'#111', background:'#fff', padding:'2px 8px', border:'2px solid #000' }}>
+                {workflowName}
+              </div>
+            ) : null}
             {toolboxOpen && (
               <div className="toolbox-panel">
                 <div className="section-title">Blocks</div>
