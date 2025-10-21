@@ -18,11 +18,15 @@ function Landing() {
     setStreamLines([])
     // Prefer streaming endpoint; fallback to non-stream if it fails
     try {
+      const { getAccessToken } = await import('../lib/auth')
+      const token = await getAccessToken()
       const controller = new AbortController()
       abortRef.current = controller
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
       const resp = await fetch(`${API_BASE_URL}/assistant/new/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ prompt: text || 'New workflow from assistant' }),
         signal: controller.signal,
       })

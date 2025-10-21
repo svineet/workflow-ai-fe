@@ -1,12 +1,21 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
 import { API_BASE_URL } from './config'
 import { Graph, WorkflowCreate, WorkflowUpdate, WorkflowResponse, RunCreate, RunResponse, LogEntry } from './types'
+import { getAccessToken } from '../lib/auth'
 
 export class ApiClient {
   private http: AxiosInstance
 
   constructor(baseURL: string = API_BASE_URL, config?: AxiosRequestConfig) {
     this.http = axios.create({ baseURL, ...(config || {}) })
+    // Add request interceptor to inject auth token
+    this.http.interceptors.request.use(async (config) => {
+      const token = await getAccessToken()
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+      return config
+    })
   }
 
   async healthz() {
@@ -109,6 +118,12 @@ export class ApiClient {
   // Assistant seeding
   async assistantNew(prompt: string, model?: string) {
     const { data } = await this.http.post<{ id: number; cached?: boolean }>(`/assistant/new`, { prompt, model })
+    return data
+  }
+
+  // Auth
+  async getAuthMe() {
+    const { data } = await this.http.get<{ user_id: string }>('/auth/me')
     return data
   }
 }

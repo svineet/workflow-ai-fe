@@ -397,55 +397,57 @@ function IDE() {
     }, 2500)
   }, [appendLogLines, stopStreaming, appendErrorLine, appendInfoLine])
 
-  const startSSE = useCallback((runId: number) => {
+  const startSSE = useCallback(async (runId: number) => {
     stopStreaming()
     try {
-      const es = new EventSource(`${API_BASE_URL}/runs/${runId}/stream`)
-      esRef.current = es
-      es.onopen = () => { setConnMode('sse') }
-      es.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data)
-          if (Array.isArray(data)) {
-            appendLogLines(data as LogEntry[])
-          } else if (data?.type === 'log' && data?.entry) {
-            appendLogLines([data.entry as LogEntry])
-          } else if (data?.type === 'node_started' && data?.node_id) {
-            setActiveNodeIds(new Set([data.node_id]))
-          } else if ((data?.type === 'node_finished' || data?.type === 'node_failed') && data?.node_id) {
-            setActiveNodeIds((prev) => { const s = new Set(prev); s.delete(data.node_id); return s })
-            const rid = currentRunIdRef.current || runId
-            if (rid && rid === (currentRunIdRef.current)) {
-              apiClient.getRun(rid).then(finalRun => {
-                setRunStore((store) => ({ ...store, [rid]: finalRun }))
-              }).catch(() => {})
-            }
-          } else if (data?.type === 'status') {
-            statusRef.current = data.status
-            appendInfoLine(`Run status: ${data.status}`)
-            if (data.status === 'succeeded' || data.status === 'failed') {
-              // Fetch final run data with outputs when completed
+      const { openRunStream } = await import('../lib/sse')
+      const es = await openRunStream(
+        runId,
+        (ev) => {
+          try {
+            const data = JSON.parse(ev.data)
+            if (Array.isArray(data)) {
+              appendLogLines(data as LogEntry[])
+            } else if (data?.type === 'log' && data?.entry) {
+              appendLogLines([data.entry as LogEntry])
+            } else if (data?.type === 'node_started' && data?.node_id) {
+              setActiveNodeIds(new Set([data.node_id]))
+            } else if ((data?.type === 'node_finished' || data?.type === 'node_failed') && data?.node_id) {
+              setActiveNodeIds((prev) => { const s = new Set(prev); s.delete(data.node_id); return s })
               const rid = currentRunIdRef.current || runId
               if (rid && rid === (currentRunIdRef.current)) {
-                try {
-                  apiClient.getRun(rid).then(finalRun => setRunStore((store) => ({ ...store, [rid]: finalRun }))).catch(console.error)
-                } catch {}
+                apiClient.getRun(rid).then(finalRun => {
+                  setRunStore((store) => ({ ...store, [rid]: finalRun }))
+                }).catch(() => {})
               }
-              setActiveNodeIds(new Set()) // Clear highlights on completion
-              stopStreaming()
+            } else if (data?.type === 'status') {
+              statusRef.current = data.status
+              appendInfoLine(`Run status: ${data.status}`)
+              if (data.status === 'succeeded' || data.status === 'failed') {
+                // Fetch final run data with outputs when completed
+                const rid = currentRunIdRef.current || runId
+                if (rid && rid === (currentRunIdRef.current)) {
+                  try {
+                    apiClient.getRun(rid).then(finalRun => setRunStore((store) => ({ ...store, [rid]: finalRun }))).catch(console.error)
+                  } catch {}
+                }
+                setActiveNodeIds(new Set()) // Clear highlights on completion
+                stopStreaming()
+              }
             }
+          } catch (err: any) {
+            console.error('SSE onmessage parse error', err, ev?.data)
+            appendErrorLine('SSE message parse error')
           }
-        } catch (err: any) {
-          console.error('SSE onmessage parse error', err, ev?.data)
-          appendErrorLine('SSE message parse error')
+        },
+        (ev) => {
+          console.error('SSE error', ev)
+          appendErrorLine('SSE connection error; switching to polling')
+          startPolling(runId)
         }
-      }
-      es.onerror = (ev) => {
-        console.error('SSE error', ev)
-        appendErrorLine('SSE connection error; switching to polling')
-        try { es.close() } catch {}
-        startPolling(runId)
-      }
+      )
+      esRef.current = es as any
+      setConnMode('sse')
     } catch (e: any) {
       console.error('SSE init error', e)
       appendErrorLine('SSE init error; switching to polling')
