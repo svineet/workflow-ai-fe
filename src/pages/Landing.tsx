@@ -11,6 +11,39 @@ function Landing() {
   const [streamLines, setStreamLines] = useState<string[]>([])
   const abortRef = useRef<AbortController | null>(null)
 
+  const suggestions: Array<{ title: string; prompt: string }> = [
+    {
+      title: 'AI News Digest → Gmail + Slack',
+      prompt:
+        "Research today’s top 5 AI news using web search. Produce concise bullets with source links. Email the digest to me at saivineet89@gmail.com and also post a short summary to Slack channel #general.",
+    },
+    {
+      title: 'Coffee Spots → Websearch + Slack',
+      prompt:
+        "Find 3 great coffee shops near downtown SF using web search. Include address, hours, and a one‑line reason for each. Post the recommendations to Slack #general with a friendly tone.",
+    },
+    {
+      title: 'Today’s Calendar Summary → Gmail',
+      prompt:
+        "Summarize all meetings on my Google Calendar for today (primary calendar). Include times in 12‑hour format with am/pm, attendees, and links if available. Email the recap to saivineet89@gmail.com with the subject ‘Today’s Meetings Overview’.",
+    },
+    {
+      title: 'API Health Check → HTTP + Slack',
+      prompt:
+        "Call https://api.github.com/rate_limit using an HTTP request. Summarize the remaining core and search rate limits, and post a short health report to Slack #devops.",
+    },
+    {
+      title: 'Create Meeting → Calendar + Email',
+      prompt:
+        "Schedule a 45‑minute ‘Project Kickoff’ meeting next Friday at 3:00 pm in my primary Google Calendar. Include agenda bullets and a short description. Invite alice@example.com and bob@example.com. After creating the event, email a confirmation to saivineet89@gmail.com with the event details.",
+    },
+    {
+      title: 'GitHub Repo Snapshot → Email',
+      prompt:
+        "Fetch repository metadata for https://api.github.com/repos/openai/openai-python using an HTTP request. Summarize stars, forks, open issues, and a one‑sentence overview. Email the snapshot to saivineet89@gmail.com with subject ‘OpenAI Python Repo Snapshot’.",
+    },
+  ]
+
   const handleBuild = async () => {
     if (building) return
     setBuilding(true)
@@ -135,6 +168,23 @@ function Landing() {
           >
             {building ? <span className="spinner" aria-hidden /> : 'Build'}
           </button>
+        </div>
+
+        {/* Suggestions (secondary) */}
+        <div style={{ marginTop: 16 }}>
+          <div className="section-title" style={{ fontSize: 14, opacity: 0.85 }}>Suggestions</div>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+            {suggestions.map((s, idx) => (
+              <div key={idx} className="neo-card" style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ fontWeight: 800 }}>{s.title}</div>
+                <div style={{ borderTop: '3px solid #000' }} />
+                <div className="muted" style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{s.prompt}</div>
+                <div className="card-actions" style={{ marginTop: 'auto' }}>
+                  <button className="neo-button" onClick={() => setText(s.prompt)}>Use</button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {(streaming || streamLines.length > 0) && (
