@@ -170,20 +170,12 @@ function Landing() {
           </button>
         </div>
 
-        {/* Suggestions (secondary) */}
+        {/* Assistant status/streaming */}
         <div style={{ marginTop: 16 }}>
-          <div className="section-title" style={{ fontSize: 14, opacity: 0.85 }}>Suggestions</div>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-            {suggestions.map((s, idx) => (
-              <div key={idx} className="neo-card" style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                <div style={{ fontWeight: 800 }}>{s.title}</div>
-                <div style={{ borderTop: '3px solid #000' }} />
-                <div className="muted" style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{s.prompt}</div>
-                <div className="card-actions" style={{ marginTop: 'auto' }}>
-                  <button className="neo-button" onClick={() => setText(s.prompt)}>Use</button>
-                </div>
-              </div>
-            ))}
+          <div className="neo-card" style={{ marginBottom: 8, background: '#fff' }}>
+            <div className="muted" style={{ fontSize: 12 }}>
+              Streaming is not enabled yet due to organisation verification. Builds still work but may take 1–2 minutes to complete.
+            </div>
           </div>
         </div>
 
@@ -201,6 +193,23 @@ function Landing() {
             </div>
           </div>
         )}
+
+        {/* Suggestions (secondary) */}
+        <div style={{ marginTop: 16 }}>
+          <div className="section-title" style={{ fontSize: 14, opacity: 0.85 }}>Suggestions</div>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+            {suggestions.map((s, idx) => (
+              <div key={idx} className="neo-card" style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ fontWeight: 800 }}>{s.title}</div>
+                <div style={{ borderTop: '3px solid #000' }} />
+                <div className="muted" style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{s.prompt}</div>
+                <div className="card-actions" style={{ marginTop: 'auto' }}>
+                  <button className="neo-button" onClick={() => setText(s.prompt)}>Use</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="cta-row" style={{marginTop: 16}}>
           <NavLink to="/ide" className="neo-button primary">Open IDE</NavLink>

@@ -1,6 +1,5 @@
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { runs } from '../mocks/runs.ts'
 import { apiClient } from '../api/client'
 import type { WorkflowResponse } from '../api/types'
 import { useModal } from '../context/ModalContext'
@@ -18,7 +17,24 @@ function WorkflowDetail() {
     apiClient.getWorkflow(numericId).then(setApiWorkflow).catch((e) => open({ title: 'Failed to load workflow', body: e?.message || 'Unknown error', primaryLabel: 'Close' }))
   }, [workflowId, open])
 
-  const relatedRuns = useMemo(() => runs.filter(r => r.workflowId === workflowId).sort((a, b) => b.startedAt - a.startedAt), [workflowId])
+  const [runs, setRuns] = useState<Array<Pick<import('../api/types').RunResponse, 'id' | 'status' | 'started_at' | 'finished_at'>>>([])
+  const [runsLoading, setRunsLoading] = useState(false)
+  const [runsError, setRunsError] = useState<string | null>(null)
+  useEffect(() => {
+    const idNum = Number(workflowId)
+    if (!Number.isFinite(idNum)) { setRuns([]); return }
+    setRunsLoading(true)
+    setRunsError(null)
+    apiClient.listRuns()
+      .then((all) => setRuns(all.filter((r) => r.workflow_id === idNum)))
+      .catch((e) => setRunsError(e?.message || 'Failed to load runs'))
+      .finally(() => setRunsLoading(false))
+  }, [workflowId])
+  const relatedRuns = useMemo(() => runs.sort((a, b) => {
+    const sa = a.started_at ? Date.parse(a.started_at) : 0
+    const sb = b.started_at ? Date.parse(b.started_at) : 0
+    return sb - sa
+  }), [runs])
 
   const handleRun = async () => {
     if (!workflowId || !Number.isFinite(Number(workflowId))) return
@@ -56,9 +72,11 @@ function WorkflowDetail() {
 
         <div className="neo-card">
           <div className="section-title">Runs</div>
-          {relatedRuns.length === 0 ? (
+          {runsLoading && <div className="muted">Loading runs…</div>}
+          {runsError && <div className="muted" style={{color:'#b00020'}}>{runsError}</div>}
+          {!runsLoading && !runsError && relatedRuns.length === 0 ? (
             <div className="muted">No runs found for this workflow.</div>
-          ) : (
+          ) : (!runsLoading && !runsError && relatedRuns.length > 0) ? (
             <div className="table-wrap">
               <table className="neo-table">
                 <thead>
@@ -71,19 +89,23 @@ function WorkflowDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {relatedRuns.map((r) => (
+                  {relatedRuns.map((r) => {
+                    const startedAt = r.started_at ? Date.parse(r.started_at) : 0
+                    const durationSeconds = r.finished_at && r.started_at ? Math.max(0, Math.round((Date.parse(r.finished_at) - Date.parse(r.started_at)) / 1000)) : 0
+                    return (
                     <tr key={r.id}>
                       <td><code>{r.id}</code></td>
                       <td>{r.status}</td>
-                      <td>{new Date(r.startedAt).toLocaleString()}</td>
-                      <td>{r.durationSeconds}s</td>
+                      <td>{startedAt ? new Date(startedAt).toLocaleString() : '—'}</td>
+                      <td>{durationSeconds}s</td>
                       <td><NavLink to={`/runs/${r.id}`} className="neo-button">Open</NavLink></td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </main>

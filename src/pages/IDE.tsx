@@ -3,11 +3,10 @@ import ReactFlow, { addEdge, Background, BackgroundVariant, Controls, Connection
 import type { ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
 import Note, { type NoteData } from '../components/Note'
-import * as blocks from '../mocks/blocks.ts'
-import { getMockLogsForIDE } from '../mocks/logs.ts'
+// Removed mock blocks and logs; rely on server specs and live logs only
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
-import { API_BASE_URL } from '../api/config'
+//
 import type { LogEntry, RunResponse } from '../api/types'
 import { FaCog, FaChevronDown, FaChevronUp, FaChevronLeft, FaChevronRight } from 'react-icons/fa'
 import { useModal } from '../context/ModalContext'
@@ -58,8 +57,8 @@ function IDE() {
   const { workflowId } = useParams()
   const { open } = useModal()
   const rfRef = useRef<ReactFlowInstance | null>(null)
-  const [nodes, setNodes] = useState<Node[]>(blocks.defaultNodes)
-  const [edges, setEdges] = useState<Edge[]>(blocks.defaultEdges)
+  const [nodes, setNodes] = useState<Node[]>([])
+  const [edges, setEdges] = useState<Edge[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [specs, setSpecs] = useState<BlockSpec[] | null>(null)
   const [query, setQuery] = useState<string>("")
@@ -121,9 +120,9 @@ function IDE() {
           setEdges(rawEdges)
           setGraphLoaded(true)
         } else {
-          const laid = layoutGraph(blocks.defaultNodes as any, blocks.defaultEdges as any)
-          setNodes(laid.nodes)
-          setEdges(laid.edges)
+          // No server workflow; keep empty canvas until user adds blocks
+          setNodes([])
+          setEdges([])
           setGraphLoaded(true)
         }
         setSpecs((specsResp.blocks as unknown as any[]) || [])
@@ -208,7 +207,7 @@ function IDE() {
   
   // Tool connection validation and add
   const onConnectValidate = useCallback((conn: Connection) => {
-    const { source, target, sourceHandle, targetHandle } = conn
+    const { source, target, sourceHandle } = conn
     const src = nodes.find((n) => n.id === source)
     const tgt = nodes.find((n) => n.id === target)
     const isTool = (n?: Node) => {
@@ -264,7 +263,7 @@ function IDE() {
     let source = String(conn.source)
     let target = String(conn.target)
     let sourceHandle = conn.sourceHandle
-    let targetHandle = conn.targetHandle
+    let targetHandle = conn.targetHandle // kept for normalization, may be overridden
     if (!isAgent(srcNode) && isAgent(tgtNode)) {
       // swap so agent is source
       source = String(conn.target)
@@ -314,9 +313,9 @@ function IDE() {
 
   const nodeTypes = useMemo(() => ({ config: ConfigNode, agent: AgentNode, tool: ToolNode }), [])
 
-  const paletteItems = specs && specs.length > 0
+  const paletteItems = (specs && specs.length > 0)
     ? specs.map((s) => ({ type: s.type, label: s.type, summary: s.summary || '' }))
-    : blocks.blockPalette.map((b) => ({ type: b.type, label: b.label, summary: '' }))
+    : []
 
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -743,7 +742,7 @@ function IDE() {
           </div>
           {consoleOpen && (
             <div className="console-lines" ref={consoleRef}>
-              {liveLogs.length ? liveLogs.map((l, idx) => (<div key={idx} className="console-line">{l}</div>)) : getMockLogsForIDE().map((l, idx) => (<div key={idx} className="console-line">{l}</div>))}
+              {liveLogs.length ? liveLogs.map((l, idx) => (<div key={idx} className="console-line">{l}</div>)) : (<div className="console-line muted">Waiting for logs…</div>)}
             </div>
           )}
         </div>

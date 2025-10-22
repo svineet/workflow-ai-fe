@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { blockPalette } from '../mocks/blocks.ts'
 import { apiClient } from '../api/client'
 
 function Blocks() {
@@ -9,7 +8,7 @@ function Blocks() {
     apiClient.getBlockSpecs().then((r) => setSpecs(r.blocks as Record<string, unknown>)).catch(() => setSpecs(null))
   }, [])
 
-  const entries = specs ? Object.entries(specs) : blockPalette.map((b) => [b.type, { label: b.label } as any])
+  const entries = specs ? Object.entries(specs) : []
 
   return (
     <main className="neo-container">
@@ -22,6 +21,9 @@ function Blocks() {
               <div className="muted"><code>{type}</code></div>
             </div>
           ))}
+          {!entries.length && (
+            <div className="neo-card" style={{gridColumn:'1/-1'}}>Loading…</div>
+          )}
         </div>
       </div>
     </main>

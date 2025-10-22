@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { getLogsForRun } from '../mocks/logs.ts'
 import { apiClient } from '../api/client'
 import type { LogEntry, RunResponse } from '../api/types'
 import { useModal } from '../context/ModalContext'
@@ -85,7 +84,7 @@ function RunsList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
 
-  const logs = apiLogs ? apiLogs.map((l) => `${l.ts} [${l.level}] ${l.message}`) : (selectedId ? getLogsForRun(selectedId) : [])
+  // Derived logs now rendered inline from apiLogs; no fallback to mocks
 
   useEffect(() => {
     if (!rows.length) { setSelectedId(null); return }
@@ -186,9 +185,13 @@ function RunsList() {
           <div className="neo-card" style={{marginTop:12}}>
             <div className="section-title">Logs {selectedId && (<code>({selectedId})</code>)}</div>
             <div className="log-view">
-              {logs.map((l, i) => (
-                <div key={i} className="log-line">{l}</div>
-              ))}
+              {apiLogs ? (
+                apiLogs.map((l, i) => (
+                  <div key={i} className="log-line">{`${l.ts} [${l.level}] ${l.message}`}</div>
+                ))
+              ) : (
+                <div className="log-line muted">{selectedId ? (loading ? 'Loading logs…' : 'No logs yet') : 'Select a run to view logs'}</div>
+              )}
             </div>
           </div>
         )}

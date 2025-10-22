@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getLogsForRun } from '../mocks/logs.ts'
 import { apiClient } from '../api/client'
 import type { LogEntry, RunResponse } from '../api/types'
 
@@ -40,7 +39,7 @@ function RunDetail() {
     containerRef.current.scrollTop = containerRef.current.scrollHeight
   }, [apiLogs])
 
-  const logs = apiLogs ? apiLogs.map((l) => `${l.ts} [${l.level}] ${l.message}`) : getLogsForRun(runId || '')
+  const logs = apiLogs ? apiLogs.map((l) => `${l.ts} [${l.level}] ${l.message}`) : null
 
   return (
     <main className="neo-container">
@@ -57,9 +56,13 @@ function RunDetail() {
         {error && <div className="neo-card" style={{color:'#b00020'}}>Error: {error}</div>}
         <div className="neo-card">
           <div className="log-view" ref={containerRef}>
-            {logs.map((l, i) => (
-              <div key={i} className="log-line">{l}</div>
-            ))}
+            {logs ? (
+              logs.map((l, i) => (
+                <div key={i} className="log-line">{l}</div>
+              ))
+            ) : (
+              <div className="log-line muted">{loading ? 'Loading logs…' : 'No logs yet'}</div>
+            )}
           </div>
         </div>
       </div>

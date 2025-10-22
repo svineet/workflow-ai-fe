@@ -115,6 +115,11 @@ export class ApiClient {
     return data
   }
 
+  async deleteComposioAccount(accountId: number) {
+    const { data } = await this.http.delete<{ deleted: boolean; revoked?: boolean }>(`/integrations/composio/accounts/${accountId}`)
+    return data
+  }
+
   // Assistant seeding
   async assistantNew(prompt: string, model?: string) {
     const { data } = await this.http.post<{ id: number; cached?: boolean }>(`/assistant/new`, { prompt, model })

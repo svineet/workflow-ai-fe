@@ -5,11 +5,6 @@ import type { WorkflowResponse, Graph } from '../api/types'
 import { useModal } from '../context/ModalContext'
 import { FaPlus, FaTrash, FaWrench } from 'react-icons/fa'
 
-const mockWorkflows = [
-  { id: 'wf-hello-world', name: 'Hello World', updatedAt: Date.now() - 86400000 },
-  { id: 'wf-http-to-llm', name: 'HTTP → LLM', updatedAt: Date.now() - 43200000 },
-]
-
 function WorkflowsList() {
   const navigate = useNavigate()
   const { open } = useModal()
@@ -100,7 +95,7 @@ function WorkflowsList() {
   const cards = useMemo(() => {
     const list = workflows && workflows.length > 0
       ? workflows.map((wf) => ({ id: Number(wf.id), name: wf.name, slug: wf.webhook_slug || '', desc: (wf.description as any as string) || '', updatedAt: Date.parse(wf.created_at) }))
-      : mockWorkflows.map((w) => ({ id: w.id as any, name: w.name, slug: '', desc: '', updatedAt: w.updatedAt }))
+      : []
     const q = query.trim().toLowerCase()
     if (!q) return list
     return list.filter((w) => w.name.toLowerCase().includes(q) || w.slug.toLowerCase().includes(q) || w.desc.toLowerCase().includes(q))
@@ -135,6 +130,13 @@ function WorkflowsList() {
               </div>
             </div>
           ))}
+          {!loading && !error && cards.length === 0 && (
+            <div className="neo-card" style={{gridColumn:'1/-1', textAlign:'center'}}>
+              <div className="card-title" style={{marginBottom:6}}>No workflows yet</div>
+              <div className="muted" style={{marginBottom:12}}>Create a workflow to get started.</div>
+              <div><button className="neo-button primary" onClick={handleNewWorkflow}><FaPlus /> New Workflow</button></div>
+            </div>
+          )}
         </div>
       </div>
     </main>
