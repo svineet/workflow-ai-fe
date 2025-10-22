@@ -1,15 +1,20 @@
 import { useState } from 'react'
 import { loginWithGoogle } from '../lib/auth'
+import { useLocation } from 'react-router-dom'
 
 function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const loc = useLocation()
+  const usp = new URLSearchParams(loc.search)
+  const next = usp.get('next') || '/'
+  const prompt = usp.get('prompt') || ''
 
   const handleLogin = async () => {
     setLoading(true)
     setError(null)
     try {
-      await loginWithGoogle()
+      await loginWithGoogle({ next, prompt })
     } catch (e: any) {
       setError(e?.message || 'Login failed')
       setLoading(false)

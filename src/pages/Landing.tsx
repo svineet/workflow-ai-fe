@@ -1,7 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { apiClient } from '../api/client'
 import { API_BASE_URL } from '../api/config'
+import { getSession } from '../lib/auth'
 
 function Landing() {
   const navigate = useNavigate()
@@ -49,6 +50,19 @@ function Landing() {
     setBuilding(true)
     setStreaming(true)
     setStreamLines([])
+    // Auth gate: if not authed, redirect to /login carrying next and prompt
+    try {
+      const session = await getSession()
+      if (!session) {
+        try { sessionStorage.setItem('landing_prompt', text || '') } catch {}
+        const next = encodeURIComponent('/')
+        const promptParam = encodeURIComponent(text || '')
+        navigate(`/login?next=${next}&prompt=${promptParam}`)
+        setBuilding(false)
+        setStreaming(false)
+        return
+      }
+    } catch {}
     // Prefer streaming endpoint; fallback to non-stream if it fails
     try {
       const { getAccessToken } = await import('../lib/auth')
@@ -144,6 +158,20 @@ function Landing() {
       setStreaming(false)
     }
   }
+
+  // Prefill from URL ?prompt or sessionStorage
+  useEffect(() => {
+    try {
+      const usp = new URLSearchParams(window.location.search)
+      const p = usp.get('prompt')
+      if (p && p.length) { setText(p); return }
+      const cached = sessionStorage.getItem('landing_prompt')
+      if (cached && cached.length) {
+        setText(cached)
+        sessionStorage.removeItem('landing_prompt')
+      }
+    } catch {}
+  }, [])
 
   return (
     <main className="landing neo-container" style={{padding: '24px 16px'}}>

@@ -1,11 +1,14 @@
 import { supabase } from './supabase'
 import type { Session, User } from '@supabase/supabase-js'
 
-export async function loginWithGoogle() {
+export async function loginWithGoogle(opts?: { next?: string; prompt?: string }) {
+  const next = opts?.next || '/'
+  const carryPrompt = opts?.prompt || ''
+  const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}&prompt=${encodeURIComponent(carryPrompt)}`
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${window.location.origin}/auth/callback`,
+      redirectTo,
       queryParams: {
         prompt: 'select_account',
       },

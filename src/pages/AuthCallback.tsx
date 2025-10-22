@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 function AuthCallback() {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
+  const loc = useLocation()
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -12,10 +13,15 @@ function AuthCallback() {
         // Supabase automatically parses the hash and sets the session
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
-        
+        const usp = new URLSearchParams(loc.search)
+        const next = usp.get('next') || '/'
+        const carryPrompt = usp.get('prompt') || ''
+        if (carryPrompt) {
+          try { sessionStorage.setItem('landing_prompt', carryPrompt) } catch {}
+        }
         if (data.session) {
           // Redirect to home/workflows after successful auth
-          navigate('/')
+          navigate(next)
         } else {
           setError('No session found')
           setTimeout(() => navigate('/login'), 2000)
@@ -26,7 +32,7 @@ function AuthCallback() {
       }
     }
     handleCallback()
-  }, [navigate])
+  }, [navigate, loc.search])
 
   return (
     <main className="landing neo-container" style={{ padding: '24px 16px' }}>
