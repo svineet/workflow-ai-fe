@@ -119,14 +119,16 @@ function WorkflowsList() {
               <div>
                 <div className="card-title link"><NavLink to={`/ide/${w.id}`}>{w.name}</NavLink></div>
                 <div style={{ borderTop: '3px solid #000', margin: '6px 0' }} />
-                {w.desc && <div style={{ whiteSpace:'pre-wrap' }}>{w.desc}</div>}
-                <div className="muted desc-min" style={{ marginTop: 6 }}>Updated {new Date(w.updatedAt).toLocaleString()}</div>
+                {w.desc && <div style={{ whiteSpace:'pre-wrap', flex: 1 }}>{w.desc}</div>}
               </div>
-              <div className="card-actions" style={{ marginTop: 8 }}>
-                <NavLink to={`/ide/${w.id}`} className="neo-button success" style={{flex:1, display:'flex', alignItems:'center', gap:8}}><FaWrench /> Edit in IDE</NavLink>
-                {typeof w.id === 'number' && (
-                  <button className="neo-button danger" style={{width:44, display:'grid', placeItems:'center'}} onClick={() => confirmDelete(w.id as number, w.name)}><FaTrash /></button>
-                )}
+              <div>
+                <div className="muted desc-min" style={{ marginTop: 12, marginBottom: 0 }}>Updated {new Date(w.updatedAt).toLocaleString()}</div>
+                <div className="card-actions">
+                  <NavLink to={`/ide/${w.id}`} className="neo-button success" style={{flex:1, display:'flex', alignItems:'center', gap:8}}><FaWrench /> Edit in IDE</NavLink>
+                  {typeof w.id === 'number' && (
+                    <button className="neo-button danger" style={{width:44, display:'grid', placeItems:'center'}} onClick={() => confirmDelete(w.id as number, w.name)}><FaTrash /></button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
